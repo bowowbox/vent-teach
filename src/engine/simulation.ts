@@ -28,6 +28,12 @@ const DT = 0.002 // internal integration step (s)
 const STORE_DT = 0.008 // sample spacing written to the display buffer (s)
 const WINDOW_S = 12 // seconds of history retained for the sweep
 const REFRACTORY = 0.25 // min seconds between triggered breaths
+// The exhalation valve must open and the trigger re-arm before another breath can be
+// delivered, so even the tightest stacked breath is preceded by a short expiration.
+// Without this a double-triggered breath begins on the next 2 ms step and the two
+// breaths render as one long inspiration.
+const EXP_VALVE_TIME = 0.15 // s
+const DOUBLE_WINDOW = 0.35 // expiration shorter than this = stacked/double breath
 const CARDIAC_OSC = 0.8 // cmH2O baseline oscillation (enables auto-trigger teaching)
 
 export class VentSim {
@@ -37,7 +43,9 @@ export class VentSim {
   private Q = 0 // L/s
   private paw = 0
   private phase: 'insp' | 'exp' = 'exp'
-  private phaseStart = 0
+  // Start as though expiration has been running for a long time, so the valve/refractory
+  // gates never delay the very first breath (which would let a patient effort steal it).
+  private phaseStart = -999
   private lastBreathStart = -999
   private breathStartVol = 0 // litres in the lung at the start of the current inspiration
   private peakInspFlow = 0 // L/s this breath (for PSV cycling)
@@ -45,6 +53,9 @@ export class VentSim {
   private prevPmus = 0
   private prevOsc = 0
   private effortCounted = false // whether current neural effort produced a breath
+  // True while the effort that opened the current breath is still going. Only such an
+  // effort may re-trigger without a fresh rising edge — that is what double triggering is.
+  private effortHeldSinceBreath = false
   private breathTimes: number[] = []
 
   // Telemetry latches (updated at end of each breath)
@@ -67,7 +78,7 @@ export class VentSim {
     this.Q = 0
     this.paw = this.s.vent.peep
     this.phase = 'exp'
-    this.phaseStart = 0
+    this.phaseStart = -999
     this.lastBreathStart = -999
     this.breathStartVol = 0
     this.peakInspFlow = 0
@@ -75,6 +86,7 @@ export class VentSim {
     this.prevPmus = 0
     this.prevOsc = 0
     this.effortCounted = false
+    this.effortHeldSinceBreath = false
     this.breathTimes = []
     this.tPeak = this.tPlateau = this.tTidal = this.tAutoPeep = 0
     this.buffer = []
@@ -134,7 +146,10 @@ export class VentSim {
 
     // Detect neural effort onset/offset for ineffective-trigger accounting.
     const effortRising = pmus > this.prevPmus && pmus > 0.5
-    if (pmus < 0.3) this.effortCounted = false
+    if (pmus < 0.3) {
+      this.effortCounted = false
+      this.effortHeldSinceBreath = false // the effort released; the next one is a fresh breath
+    }
 
     let trigger: TriggerEvent | undefined
 
@@ -155,6 +170,7 @@ export class VentSim {
 
       // --- triggering decisions ---
       const sinceBreath = this.t - this.lastBreathStart
+      const sinceExp = this.t - this.phaseStart
       const autoPeep = Math.max(0, this.V / C) // residual elastic pressure = dynamic PEEP
       const pressThresh =
         vent.triggerType === 'pressure' ? vent.triggerSensitivity : vent.triggerSensitivity * lung.resistanceExp / 60
@@ -162,15 +178,22 @@ export class VentSim {
       // Patient must overcome auto-PEEP AND the set sensitivity to trigger.
       const effectiveNeed = autoPeep + triggerThresh
 
-      const canTrigger = sinceBreath > REFRACTORY
+      const canTrigger = sinceBreath > REFRACTORY && sinceExp >= EXP_VALVE_TIME
       const mandatoryDue =
         (vent.mode === 'VC-AC' || vent.mode === 'PC-AC') &&
         sinceBreath >= 60 / vent.rate
 
-      if (canTrigger && effort.enabled && pmus >= effectiveNeed && effortRising) {
-        // A patient trigger arriving right after exhalation opened = stacked/double breath.
-        const sinceExp = this.t - this.phaseStart
-        trigger = sinceExp < 0.35 ? 'double' : 'patient'
+      // A fresh effort triggers on its rising edge. The effort that opened the current breath
+      // may also re-trigger while still held, without a new rising edge — that is double
+      // triggering. What stops a third stacked breath is `effectiveNeed`: the elastic recoil
+      // of the volume already in the lung climbs with each stacked breath until the effort can
+      // no longer overcome it. Reverse triggering is unaffected, since there the mandatory
+      // breath opens with no effort at all and the entrained effort must show a rising edge.
+      if (canTrigger && effort.enabled && pmus >= effectiveNeed && (effortRising || this.effortHeldSinceBreath)) {
+        // A short expiration only means "stacked" if a breath actually preceded it, which is
+        // not true of the very first breath after a reset.
+        const stacked = this.breathTimes.length > 0 && sinceExp < DOUBLE_WINDOW
+        trigger = stacked ? 'double' : 'patient'
         this.tAutoPeep = round1(autoPeep)
       } else if (canTrigger && mandatoryDue) {
         trigger = 'time'
@@ -199,6 +222,8 @@ export class VentSim {
       if (trigger === 'patient' || trigger === 'time' || trigger === 'auto' || trigger === 'double') {
         this.startInspiration(trigger)
         this.effortCounted = true
+        // Only an effort already under way at breath start can go on to stack a second breath.
+        this.effortHeldSinceBreath = pmus > 0.5
       }
     } else {
       // Inspiration

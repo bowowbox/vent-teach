@@ -1,6 +1,22 @@
 import type { SimSettings, VentSettings, LungParams, EffortParams } from '../engine/types'
 import { defaultSettings } from '../engine/presets'
+import { VentSim } from '../engine/simulation'
 import type { LS } from '../i18n/types'
+
+/**
+ * Replay the model headlessly and report whether it still double-triggers.
+ *
+ * A settings heuristic ("is Ti long enough?") drifts away from what the learner can
+ * actually see on the waveform — it once marked the scenario resolved on load, and it
+ * called a visibly clean tracing unresolved. Asking the engine cannot disagree with
+ * the tracing, because it is the same engine. ~8 s of model time, a fraction of a ms.
+ */
+function stillDoubleTriggers(s: SimSettings): boolean {
+  const sim = new VentSim(s)
+  for (let i = 0; i < 4000; i++) sim.advance(0.002)
+  // Skip the start-up transient before the breath rhythm settles.
+  return sim.getBuffer().some((x) => x.t > 2 && x.triggerEvent === 'double')
+}
 
 export interface Scenario {
   id: string
@@ -151,10 +167,7 @@ export const scenarios: Scenario[] = [
       },
     ],
     refIds: ['thille2026', 'sottile2024', 'costa2025'],
-    check: (s) =>
-      (s.vent.mode === 'VC-AC' && s.vent.tidalVolume / (s.vent.inspFlow / 60) >= 1.1) ||
-      (s.vent.mode === 'PC-AC' && s.vent.inspTime >= 1.1) ||
-      s.effort.amplitude <= 6,
+    check: (s) => !stillDoubleTriggers(s),
     successText: {
       en: 'Matching the ventilator inspiratory time to the neural effort (or reducing drive) stops the second stacked breath. One effort now yields one breath.',
       th: 'การปรับ inspiratory time ของเครื่องให้ตรงกับ neural effort (หรือการลด drive) หยุด breath ที่สองที่ซ้อนกันได้ ตอนนี้ effort หนึ่งครั้งได้ breath หนึ่งครั้ง',
