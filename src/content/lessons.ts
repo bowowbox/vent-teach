@@ -1,6 +1,5 @@
 import type { SimSettings, VentSettings, LungParams, EffortParams } from '../engine/types'
 import { defaultSettings } from '../engine/presets'
-import type { LearnerLevel } from '../store/simStore'
 
 export type Block =
   | { t: 'p'; text: string }
@@ -13,7 +12,6 @@ export interface Lesson {
   id: string
   title: string
   subtitle: string
-  minLevel: LearnerLevel // lowest level this is aimed at (all higher levels see it too)
   blocks: Block[]
   refIds: string[]
 }
@@ -35,7 +33,6 @@ export const lessons: Lesson[] = [
     id: 'anatomy',
     title: '1 · Anatomy of a breath',
     subtitle: 'The three waveforms every ventilator shows you',
-    minLevel: 'student',
     blocks: [
       {
         t: 'p',
@@ -74,7 +71,6 @@ export const lessons: Lesson[] = [
     id: 'modes',
     title: '2 · Modes: what the ventilator controls',
     subtitle: 'Volume vs. pressure — and who does the work',
-    minLevel: 'student',
     blocks: [
       {
         t: 'p',
@@ -127,7 +123,6 @@ export const lessons: Lesson[] = [
     id: 'oxygenation',
     title: '3 · Oxygenation: PEEP & FiO₂',
     subtitle: 'The two knobs that set the oxygen',
-    minLevel: 'student',
     blocks: [
       {
         t: 'p',
@@ -160,7 +155,6 @@ export const lessons: Lesson[] = [
     id: 'ventilation',
     title: '4 · Ventilation: tidal volume & rate',
     subtitle: 'Clearing CO₂ — minute ventilation',
-    minLevel: 'student',
     blocks: [
       {
         t: 'p',
@@ -192,7 +186,6 @@ export const lessons: Lesson[] = [
     id: 'lung-protective',
     title: '5 · Lung-protective ventilation',
     subtitle: 'Plateau pressure & driving pressure',
-    minLevel: 'nurse',
     blocks: [
       {
         t: 'p',
@@ -226,7 +219,6 @@ export const lessons: Lesson[] = [
     id: 'triggering',
     title: '6 · Triggering & cycling',
     subtitle: 'How the patient and ventilator hand off — the bridge to dyssynchrony',
-    minLevel: 'nurse',
     blocks: [
       {
         t: 'p',
@@ -261,9 +253,3 @@ export const lessons: Lesson[] = [
   },
 ]
 
-export const levelRank: Record<LearnerLevel, number> = { student: 0, nurse: 1, resident: 2 }
-
-/** True when a lesson sits above the learner's current level (shown as a "stretch" badge). */
-export function isStretch(lesson: Lesson, level: LearnerLevel): boolean {
-  return levelRank[lesson.minLevel] > levelRank[level]
-}

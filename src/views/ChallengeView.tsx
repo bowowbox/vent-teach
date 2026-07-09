@@ -35,7 +35,7 @@ export function ChallengeView() {
   const options = useMemo(() => shuffle([scenario, ...pickDistractors(scenario)].map((s) => s.title)), [idx])
 
   return (
-    <div className="p-4 space-y-4">
+    <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-slate-300 mr-1">Challenge</span>
         {scenarios.map((s, i) => (
@@ -51,17 +51,20 @@ export function ChallengeView() {
         ))}
       </div>
 
+      <div className="rounded-xl bg-slate-900/70 ring-1 ring-slate-800 p-3">
+        <p className="text-sm text-slate-300">
+          <span className="font-semibold text-slate-100">Bedside brief:</span> This patient’s
+          waveforms look wrong. Diagnose the problem, then adjust the ventilator to resolve it.
+        </p>
+      </div>
+
+      {/* Waveforms pinned to top on mobile so they stay visible while adjusting controls */}
+      <div className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur rounded-lg py-1 xl:static xl:bg-transparent xl:py-0">
+        <SimStage minH={300} />
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 space-y-4 min-w-0">
-          <div className="rounded-xl bg-slate-900/70 ring-1 ring-slate-800 p-3">
-            <p className="text-sm text-slate-300">
-              <span className="font-semibold text-slate-100">Bedside brief:</span> This patient’s
-              waveforms look wrong. Diagnose the problem, then adjust the ventilator to resolve it.
-            </p>
-          </div>
-
-          <SimStage minH={320} />
-
+        <div className="order-3 xl:order-1 xl:col-span-2 space-y-4 min-w-0">
           {phase === 'identify' && (
             <Panel title="Step 1 · What are you looking at?">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -147,7 +150,7 @@ export function ChallengeView() {
           )}
         </div>
 
-        <div className="space-y-3 min-w-0">
+        <div className="order-2 xl:order-2 space-y-3 min-w-0">
           <ControlPanel />
           <PatientPanel />
         </div>

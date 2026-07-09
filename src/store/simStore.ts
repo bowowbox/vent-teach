@@ -12,15 +12,12 @@ import { defaultSettings } from '../engine/presets'
 // A single simulation instance lives outside React and is stepped by the RAF loop.
 export const sim = new VentSim(defaultSettings)
 
-export type LearnerLevel = 'student' | 'nurse' | 'resident'
-
 interface SimStore {
   settings: SimSettings
   telemetry: Telemetry
   running: boolean
   speed: number
   showPmus: boolean
-  level: LearnerLevel
 
   setVent: (patch: Partial<VentSettings>) => void
   setLung: (patch: Partial<LungParams>) => void
@@ -30,7 +27,6 @@ interface SimStore {
   toggleRunning: () => void
   setSpeed: (s: number) => void
   setShowPmus: (v: boolean) => void
-  setLevel: (l: LearnerLevel) => void
   resetSim: () => void
   _setTelemetry: (t: Telemetry) => void
 }
@@ -51,7 +47,6 @@ export const useSim = create<SimStore>((set) => ({
   running: true,
   speed: 1,
   showPmus: false,
-  level: 'student',
 
   setVent: (patch) => {
     sim.updateSettings({ vent: patch })
@@ -73,7 +68,6 @@ export const useSim = create<SimStore>((set) => ({
   toggleRunning: () => set((st) => ({ running: !st.running })),
   setSpeed: (s) => set({ speed: s }),
   setShowPmus: (v) => set({ showPmus: v }),
-  setLevel: (l) => set({ level: l }),
   resetSim: () => {
     sim.reset()
     set({ telemetry: emptyTelemetry })

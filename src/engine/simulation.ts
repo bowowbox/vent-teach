@@ -39,7 +39,7 @@ export class VentSim {
   private phase: 'insp' | 'exp' = 'exp'
   private phaseStart = 0
   private lastBreathStart = -999
-  private deliveredV = 0 // litres this breath
+  private breathStartVol = 0 // litres in the lung at the start of the current inspiration
   private peakInspFlow = 0 // L/s this breath (for PSV cycling)
   private neuralClock = 0 // s within the patient's neural cycle
   private prevPmus = 0
@@ -69,7 +69,7 @@ export class VentSim {
     this.phase = 'exp'
     this.phaseStart = 0
     this.lastBreathStart = -999
-    this.deliveredV = 0
+    this.breathStartVol = 0
     this.peakInspFlow = 0
     this.neuralClock = 0
     this.prevPmus = 0
@@ -209,7 +209,10 @@ export class VentSim {
         this.Q = setFlow
         this.paw = vent.peep + this.V / C + lung.resistance * this.Q - pmus
         this.peakInspFlow = Math.max(this.peakInspFlow, this.Q)
-        if (this.deliveredV >= vent.tidalVolume / 1000) {
+        // Cycle once a full set tidal volume has been delivered THIS breath. Measuring
+        // delivered volume relative to the breath's starting lung volume is what lets a
+        // stacked (double-triggered) second breath deliver its own full tidal volume.
+        if (this.V - this.breathStartVol >= vent.tidalVolume / 1000) {
           this.endInspiration()
         }
       } else {
@@ -241,7 +244,6 @@ export class VentSim {
 
     // Integrate volume.
     this.V = Math.max(0, this.V + this.Q * dt)
-    this.deliveredV = Math.max(this.deliveredV, this.V)
 
     this.prevPmus = pmus
     this.prevOsc = osc
@@ -262,7 +264,7 @@ export class VentSim {
     this.phase = 'insp'
     this.phaseStart = this.t
     this.lastBreathStart = this.t
-    this.deliveredV = this.V
+    this.breathStartVol = this.V
     this.peakInspFlow = 0.0001
     this.breathTimes.push(this.t)
     const cutoff = this.t - 30

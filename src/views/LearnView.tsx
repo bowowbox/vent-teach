@@ -1,34 +1,33 @@
 import { useState } from 'react'
-import { lessons, isStretch, type Block } from '../content/lessons'
+import { lessons, type Block } from '../content/lessons'
 import { useSim } from '../store/simStore'
 import { SimStage } from '../components/SimStage'
 import { ReferenceList } from '../components/ReferenceList'
 
 export function LearnView() {
   const [activeId, setActiveId] = useState(lessons[0].id)
-  const level = useSim((s) => s.level)
   const applySettings = useSim((s) => s.applySettings)
   const setRunning = useSim((s) => s.setRunning)
   const lesson = lessons.find((l) => l.id === activeId)!
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
-      {/* Lesson list */}
-      <aside className="lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800 p-3 space-y-1.5 lg:overflow-y-auto">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 px-1 mb-1">
+      {/* Lesson list: horizontal scroll strip on mobile, sidebar on desktop */}
+      <aside className="lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800 p-2 lg:p-3 lg:overflow-y-auto">
+        <h2 className="hidden lg:block text-[11px] font-semibold uppercase tracking-wide text-slate-500 px-1 mb-1">
           Fundamentals
         </h2>
-        {lessons.map((l) => (
-          <button
-            key={l.id}
-            onClick={() => setActiveId(l.id)}
-            className={`w-full text-left rounded-lg px-3 py-2 transition ${
-              activeId === l.id
-                ? 'bg-sky-500/15 ring-1 ring-sky-500/40'
-                : 'hover:bg-slate-800/50'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
+        <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
+          {lessons.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => setActiveId(l.id)}
+              className={`shrink-0 lg:shrink w-52 lg:w-full text-left rounded-lg px-3 py-2 transition ${
+                activeId === l.id
+                  ? 'bg-sky-500/15 ring-1 ring-sky-500/40'
+                  : 'bg-slate-900/40 lg:bg-transparent hover:bg-slate-800/50'
+              }`}
+            >
               <span
                 className={`text-sm font-medium ${
                   activeId === l.id ? 'text-sky-200' : 'text-slate-200'
@@ -36,20 +35,25 @@ export function LearnView() {
               >
                 {l.title}
               </span>
-              {isStretch(l, level) && (
-                <span className="text-[9px] font-semibold text-amber-400 bg-amber-400/10 rounded px-1 py-0.5">
-                  stretch
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{l.subtitle}</p>
-          </button>
-        ))}
+              <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{l.subtitle}</p>
+            </button>
+          ))}
+        </div>
       </aside>
 
       {/* Lesson body + live sim */}
-      <div className="flex-1 min-w-0 grid grid-cols-1 xl:grid-cols-2 gap-4 p-4 overflow-y-auto">
-        <article className="min-w-0 space-y-3">
+      <div className="flex-1 min-w-0 grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 overflow-y-auto">
+        {/* Sim pinned to top on mobile so waveforms stay visible while reading / tapping "Try this" */}
+        <div className="order-1 xl:order-2 sticky top-0 z-10 self-start w-full min-w-0 bg-slate-950/90 backdrop-blur xl:bg-transparent rounded-lg pt-1 pb-2 xl:py-0">
+          <SimStage minH={300} />
+          <p className="mt-2 text-[11px] text-slate-500 hidden sm:block">
+            Press a <span className="text-sky-300 font-medium">“Try this”</span> button in the
+            lesson to load a scenario into the live waveforms, then explore with the Sandbox
+            controls.
+          </p>
+        </div>
+
+        <article className="order-2 xl:order-1 min-w-0 space-y-3">
           <header>
             <h1 className="text-lg font-bold text-slate-100">{lesson.title}</h1>
             <p className="text-sm text-slate-400">{lesson.subtitle}</p>
@@ -66,15 +70,6 @@ export function LearnView() {
           ))}
           <ReferenceList ids={lesson.refIds} />
         </article>
-
-        <div className="min-w-0 xl:sticky xl:top-0 self-start w-full">
-          <SimStage minH={340} />
-          <p className="mt-2 text-[11px] text-slate-500">
-            Press a <span className="text-sky-300 font-medium">“Try this”</span> button in the
-            lesson to load a scenario into the live waveforms above, then explore with the Sandbox
-            controls.
-          </p>
-        </div>
       </div>
     </div>
   )

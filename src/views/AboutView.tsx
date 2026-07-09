@@ -41,7 +41,6 @@ export function AboutView() {
             'Sandbox — free play with every setting; ideal for demonstrating a concept live in a lecture or on rounds.',
             'Dyssynchrony — six annotated asynchronies with mechanism, recognition, and fixes you can apply live.',
             'Challenges — learners identify the asynchrony and then resolve it; the app checks their fix.',
-            'Use the Learner toggle (Student / Nurse / Resident) to flag stretch material and pitch depth appropriately.',
           ].map((x, i) => (
             <li key={i} className="flex gap-2 text-sm text-slate-300">
               <span className="text-sky-500 mt-0.5">▸</span>
