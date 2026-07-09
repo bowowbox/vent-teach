@@ -16,8 +16,23 @@ body {
   margin: 0;
   background: #0b1120;
   color: #e2e8f0;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Thai faces sit after the Latin ones: Latin glyphs still resolve first,
+     and Thai falls through to a system face that actually has the glyphs. */
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Leelawadee UI', 'Noto Sans Thai', 'Sarabun', 'Thonburi', sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Thai stacks tone marks above and vowels below the base glyph, so the
+   tightest Tailwind leading utilities clip them. Relax those in Thai only. */
+html[lang='th'] .leading-none {
+  line-height: 1.25;
+}
+html[lang='th'] .leading-tight {
+  line-height: 1.4;
+}
+html[lang='th'] .leading-snug {
+  line-height: 1.6;
 }
 
 /* Range slider styling for a consistent look across the control panels */

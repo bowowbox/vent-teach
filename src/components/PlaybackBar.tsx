@@ -1,7 +1,9 @@
 import { useSim } from '../store/simStore'
 import { Toggle } from './ui'
+import { useUI } from '../i18n'
 
 export function PlaybackBar() {
+  const ui = useUI()
   const running = useSim((s) => s.running)
   const speed = useSim((s) => s.speed)
   const showPmus = useSim((s) => s.showPmus)
@@ -16,13 +18,13 @@ export function PlaybackBar() {
         onClick={toggleRunning}
         className="inline-flex items-center gap-1.5 rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition"
       >
-        {running ? '❚❚ Pause' : '▶ Play'}
+        {running ? `❚❚ ${ui.playback.pause}` : `▶ ${ui.playback.play}`}
       </button>
       <button
         onClick={resetSim}
         className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-slate-700 transition"
       >
-        ↺ Reset
+        ↺ {ui.playback.reset}
       </button>
 
       <div className="flex items-center gap-1 rounded-lg bg-slate-800/60 p-1">
@@ -39,7 +41,7 @@ export function PlaybackBar() {
         ))}
       </div>
 
-      <Toggle label="Show Pmus (effort)" checked={showPmus} onChange={setShowPmus} />
+      <Toggle label={ui.playback.showPmus} checked={showPmus} onChange={setShowPmus} />
     </div>
   )
 }

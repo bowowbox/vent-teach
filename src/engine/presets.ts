@@ -1,4 +1,5 @@
 import type { SimSettings, LungParams, EffortParams, VentSettings } from './types'
+import type { LS } from '../i18n/types'
 
 export const defaultVent: VentSettings = {
   mode: 'VC-AC',
@@ -19,34 +20,46 @@ export const defaultVent: VentSettings = {
 // --- Lung phenotypes --------------------------------------------------------
 export interface LungPreset {
   id: string
-  label: string
-  blurb: string
+  label: LS
+  blurb: LS
   lung: LungParams
 }
 
 export const lungPresets: LungPreset[] = [
   {
     id: 'normal',
-    label: 'Normal lungs',
-    blurb: 'Healthy compliance and resistance. Baseline for learning normal waveforms.',
+    label: { en: 'Normal lungs', th: 'ปอดปกติ' },
+    blurb: {
+      en: 'Healthy compliance and resistance. Baseline for learning normal waveforms.',
+      th: 'Compliance และ resistance ปกติ ใช้เป็นค่าตั้งต้นสำหรับเรียนรู้ waveform ปกติ',
+    },
     lung: { compliance: 60, resistance: 8, resistanceExp: 10 },
   },
   {
     id: 'ards',
-    label: 'ARDS (stiff)',
-    blurb: 'Low compliance "baby lung". Watch plateau pressure and driving pressure.',
+    label: { en: 'ARDS (stiff)', th: 'ARDS (ปอดแข็ง)' },
+    blurb: {
+      en: 'Low compliance "baby lung". Watch plateau pressure and driving pressure.',
+      th: 'Compliance ต่ำแบบ "baby lung" ให้เฝ้าดู plateau pressure และ driving pressure',
+    },
     lung: { compliance: 30, resistance: 10, resistanceExp: 12 },
   },
   {
     id: 'copd',
-    label: 'COPD (obstructive)',
-    blurb: 'High resistance with slow emptying. Prone to auto-PEEP and gas trapping.',
+    label: { en: 'COPD (obstructive)', th: 'COPD (อุดกั้น)' },
+    blurb: {
+      en: 'High resistance with slow emptying. Prone to auto-PEEP and gas trapping.',
+      th: 'Resistance สูงและระบายลมออกช้า เสี่ยงต่อ auto-PEEP และ gas trapping',
+    },
     lung: { compliance: 65, resistance: 18, resistanceExp: 28 },
   },
   {
     id: 'severe-ards',
-    label: 'Severe ARDS',
-    blurb: 'Very low compliance. Small tidal volumes and high PEEP become critical.',
+    label: { en: 'Severe ARDS', th: 'Severe ARDS' },
+    blurb: {
+      en: 'Very low compliance. Small tidal volumes and high PEEP become critical.',
+      th: 'Compliance ต่ำมาก การใช้ tidal volume ต่ำและ PEEP สูงจึงสำคัญอย่างยิ่ง',
+    },
     lung: { compliance: 20, resistance: 12, resistanceExp: 14 },
   },
 ]

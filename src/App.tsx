@@ -8,19 +8,22 @@ import { LearnView } from './views/LearnView'
 import { DyssynchronyView } from './views/DyssynchronyView'
 import { ChallengeView } from './views/ChallengeView'
 import { AboutView } from './views/AboutView'
+import { LangToggle } from './components/LangToggle'
+import { useUI } from './i18n'
 
 type View = 'learn' | 'sandbox' | 'dyssynchrony' | 'challenges' | 'about'
 
-const NAV: { id: View; label: string; icon: string }[] = [
-  { id: 'learn', label: 'Learn', icon: '📘' },
-  { id: 'sandbox', label: 'Sandbox', icon: '🎛️' },
-  { id: 'dyssynchrony', label: 'Dyssynchrony', icon: '⚡' },
-  { id: 'challenges', label: 'Challenges', icon: '🎯' },
-  { id: 'about', label: 'About', icon: 'ℹ️' },
+const NAV: { id: View; icon: string }[] = [
+  { id: 'learn', icon: '📘' },
+  { id: 'sandbox', icon: '🎛️' },
+  { id: 'dyssynchrony', icon: '⚡' },
+  { id: 'challenges', icon: '🎯' },
+  { id: 'about', icon: 'ℹ️' },
 ]
 
 export function App() {
   const [view, setView] = useState<View>('learn')
+  const ui = useUI()
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -29,11 +32,10 @@ export function App() {
           <span className="text-xl">🫁</span>
           <div>
             <h1 className="text-sm font-bold text-slate-100 leading-none">VentTeach</h1>
-            <p className="text-[10px] text-slate-500 leading-tight">
-              Ventilator settings & patient–ventilator dyssynchrony
-            </p>
+            <p className="text-[10px] text-slate-500 leading-tight">{ui.app.tagline}</p>
           </div>
         </div>
+        <LangToggle />
       </header>
 
       <div className="flex flex-1 min-h-0 flex-col sm:flex-row">
@@ -55,7 +57,7 @@ export function App() {
                           }`}
             >
               <span className="text-lg sm:text-base">{n.icon}</span>
-              <span className="text-[10px] sm:text-sm leading-none">{n.label}</span>
+              <span className="text-[10px] sm:text-sm leading-none">{ui.nav[n.id]}</span>
             </button>
           ))}
         </nav>

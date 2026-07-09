@@ -5,6 +5,7 @@ import { SimStage } from '../components/SimStage'
 import { ControlPanel } from '../components/ControlPanel'
 import { PatientPanel } from '../components/PatientPanel'
 import { Panel } from '../components/ui'
+import { useT, useUI } from '../i18n'
 
 export function ChallengeView() {
   const [idx, setIdx] = useState(0)
@@ -13,6 +14,8 @@ export function ChallengeView() {
   const applySettings = useSim((s) => s.applySettings)
   const setRunning = useSim((s) => s.setRunning)
   const settings = useSim((s) => s.settings)
+  const t = useT()
+  const ui = useUI()
 
   const scenario = scenarios[idx]
   const resolved = useMemo(() => scenario.check(settings), [scenario, settings])
@@ -37,7 +40,7 @@ export function ChallengeView() {
   return (
     <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold text-slate-300 mr-1">Challenge</span>
+        <span className="text-sm font-semibold text-slate-300 mr-1">{ui.challenge.label}</span>
         {scenarios.map((s, i) => (
           <button
             key={s.id}
@@ -53,8 +56,8 @@ export function ChallengeView() {
 
       <div className="rounded-xl bg-slate-900/70 ring-1 ring-slate-800 p-3">
         <p className="text-sm text-slate-300">
-          <span className="font-semibold text-slate-100">Bedside brief:</span> This patient’s
-          waveforms look wrong. Diagnose the problem, then adjust the ventilator to resolve it.
+          <span className="font-semibold text-slate-100">{ui.challenge.briefLabel}</span>{' '}
+          {ui.challenge.briefText}
         </p>
       </div>
 
@@ -66,7 +69,7 @@ export function ChallengeView() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="order-3 xl:order-1 xl:col-span-2 space-y-4 min-w-0">
           {phase === 'identify' && (
-            <Panel title="Step 1 · What are you looking at?">
+            <Panel title={ui.challenge.step1}>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {options.map((opt) => {
                   const isCorrect = opt === scenario.title
@@ -96,14 +99,14 @@ export function ChallengeView() {
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <p className="text-sm text-slate-300">
                     {picked === scenario.title
-                      ? 'Correct — now resolve it using the controls.'
-                      : `Not quite. This is ${scenario.title.toLowerCase()}. Read the mechanism, then fix it.`}
+                      ? ui.challenge.correct
+                      : ui.challenge.notQuite(scenario.title)}
                   </p>
                   <button
                     onClick={() => setPhase('fix')}
                     className="shrink-0 rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-sky-400"
                   >
-                    Fix it →
+                    {ui.challenge.fixIt}
                   </button>
                 </div>
               )}
@@ -111,7 +114,7 @@ export function ChallengeView() {
           )}
 
           {phase === 'fix' && (
-            <Panel title="Step 2 · Resolve the asynchrony">
+            <Panel title={ui.challenge.step2}>
               <div
                 className={`rounded-lg p-3 ring-1 transition ${
                   resolved
@@ -126,22 +129,22 @@ export function ChallengeView() {
                     }`}
                   />
                   <span className={`text-sm font-semibold ${resolved ? 'text-emerald-200' : 'text-amber-200'}`}>
-                    {resolved ? 'Resolved' : 'Not resolved yet'}
+                    {resolved ? ui.challenge.resolved : ui.challenge.notResolved}
                   </span>
                 </div>
                 <p className="text-sm text-slate-300 leading-snug">
-                  {resolved ? scenario.successText : 'Use the ventilator and patient controls to correct the problem. This panel updates live.'}
+                  {resolved ? t(scenario.successText) : ui.challenge.notResolvedHint}
                 </p>
               </div>
               <details className="mt-3">
                 <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-200">
-                  Show a hint
+                  {ui.challenge.showHint}
                 </summary>
                 <ul className="mt-2 space-y-1.5">
                   {scenario.fix.map((f, i) => (
                     <li key={i} className="flex gap-2 text-sm text-slate-300">
                       <span className="text-emerald-400 mt-0.5">✓</span>
-                      <span className="leading-snug">{f}</span>
+                      <span className="leading-snug">{t(f)}</span>
                     </li>
                   ))}
                 </ul>

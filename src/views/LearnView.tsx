@@ -3,19 +3,22 @@ import { lessons, type Block } from '../content/lessons'
 import { useSim } from '../store/simStore'
 import { SimStage } from '../components/SimStage'
 import { ReferenceList } from '../components/ReferenceList'
+import { useT, useUI } from '../i18n'
 
 export function LearnView() {
   const [activeId, setActiveId] = useState(lessons[0].id)
   const applySettings = useSim((s) => s.applySettings)
   const setRunning = useSim((s) => s.setRunning)
   const lesson = lessons.find((l) => l.id === activeId)!
+  const t = useT()
+  const ui = useUI()
 
   return (
     <div className="flex flex-col lg:flex-row h-full">
       {/* Lesson list: horizontal scroll strip on mobile, sidebar on desktop */}
       <aside className="lg:w-64 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-800 p-2 lg:p-3 lg:overflow-y-auto">
         <h2 className="hidden lg:block text-[11px] font-semibold uppercase tracking-wide text-slate-500 px-1 mb-1">
-          Fundamentals
+          {ui.learn.fundamentals}
         </h2>
         <div className="flex lg:flex-col gap-1.5 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
           {lessons.map((l) => (
@@ -33,9 +36,9 @@ export function LearnView() {
                   activeId === l.id ? 'text-sky-200' : 'text-slate-200'
                 }`}
               >
-                {l.title}
+                {t(l.title)}
               </span>
-              <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{l.subtitle}</p>
+              <p className="text-[11px] text-slate-500 leading-tight mt-0.5">{t(l.subtitle)}</p>
             </button>
           ))}
         </div>
@@ -46,17 +49,13 @@ export function LearnView() {
         {/* Sim pinned to top on mobile so waveforms stay visible while reading / tapping "Try this" */}
         <div className="order-1 xl:order-2 xl:sticky xl:top-0 self-start w-full min-w-0 rounded-lg">
           <SimStage minH={300} />
-          <p className="mt-2 text-[11px] text-slate-500 hidden sm:block">
-            Press a <span className="text-sky-300 font-medium">“Try this”</span> button in the
-            lesson to load a scenario into the live waveforms, then explore with the Sandbox
-            controls.
-          </p>
+          <p className="mt-2 text-[11px] text-slate-500 hidden sm:block">{ui.learn.tryHint}</p>
         </div>
 
         <article className="order-2 xl:order-1 min-w-0 space-y-3">
           <header>
-            <h1 className="text-lg font-bold text-slate-100">{lesson.title}</h1>
-            <p className="text-sm text-slate-400">{lesson.subtitle}</p>
+            <h1 className="text-lg font-bold text-slate-100">{t(lesson.title)}</h1>
+            <p className="text-sm text-slate-400">{t(lesson.subtitle)}</p>
           </header>
           {lesson.blocks.map((b, i) => (
             <BlockView
@@ -76,18 +75,21 @@ export function LearnView() {
 }
 
 function BlockView({ block, onTry }: { block: Block; onTry: (s: import('../engine/types').SimSettings) => void }) {
+  const t = useT()
+  const ui = useUI()
+
   switch (block.t) {
     case 'h':
-      return <h3 className="text-sm font-semibold text-sky-300 pt-1">{block.text}</h3>
+      return <h3 className="text-sm font-semibold text-sky-300 pt-1">{t(block.text)}</h3>
     case 'p':
-      return <p className="text-sm leading-relaxed text-slate-300">{block.text}</p>
+      return <p className="text-sm leading-relaxed text-slate-300">{t(block.text)}</p>
     case 'list':
       return (
         <ul className="space-y-1.5 pl-1">
           {block.items.map((it, i) => (
             <li key={i} className="flex gap-2 text-sm text-slate-300">
               <span className="text-sky-500 mt-0.5">▸</span>
-              <span className="leading-snug">{it}</span>
+              <span className="leading-snug">{t(it)}</span>
             </li>
           ))}
         </ul>
@@ -102,7 +104,7 @@ function BlockView({ block, onTry }: { block: Block; onTry: (s: import('../engin
       return (
         <div className={`rounded-lg ring-1 p-3 text-sm leading-snug ${styles}`}>
           <span className="mr-1.5">{icon}</span>
-          {block.text}
+          {t(block.text)}
         </div>
       )
     }
@@ -113,9 +115,9 @@ function BlockView({ block, onTry }: { block: Block; onTry: (s: import('../engin
             onClick={() => onTry(block.settings)}
             className="rounded-lg bg-sky-500 px-3 py-1.5 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition"
           >
-            ▶ Try this: {block.label}
+            ▶ {ui.learn.tryThis}: {t(block.label)}
           </button>
-          <p className="mt-2 text-xs text-slate-400 leading-snug">{block.note}</p>
+          <p className="mt-2 text-xs text-slate-400 leading-snug">{t(block.note)}</p>
         </div>
       )
   }

@@ -1,7 +1,9 @@
 import { useSim } from '../store/simStore'
 import { Slider, SegGroup, Panel } from './ui'
+import { useUI } from '../i18n'
 import type { VentMode } from '../engine/types'
 
+// Mode names are the labels printed on the ventilator — never translated.
 const MODE_OPTIONS: { value: VentMode; label: string }[] = [
   { value: 'VC-AC', label: 'VC-AC' },
   { value: 'PC-AC', label: 'PC-AC' },
@@ -9,28 +11,24 @@ const MODE_OPTIONS: { value: VentMode; label: string }[] = [
   { value: 'CPAP', label: 'CPAP' },
 ]
 
-const MODE_DESC: Record<VentMode, string> = {
-  'VC-AC': 'Volume Assist-Control — you set the tidal volume and flow; pressure is what results.',
-  'PC-AC': 'Pressure Assist-Control — you set inspiratory pressure and time; volume is what results.',
-  PSV: 'Pressure Support — every breath is patient-triggered and flow-cycled. Needs patient effort.',
-  CPAP: 'Spontaneous/CPAP — constant airway pressure, no inspiratory boost. Needs patient effort.',
-}
-
 export function ControlPanel() {
   const vent = useSim((s) => s.settings.vent)
   const setVent = useSim((s) => s.setVent)
+  const ui = useUI()
 
   return (
-    <Panel title="Ventilator settings">
+    <Panel title={ui.vent.panelTitle}>
       <div className="space-y-3.5">
         <div>
           <SegGroup
-            label="Mode"
+            label={ui.vent.mode}
             value={vent.mode}
             options={MODE_OPTIONS}
             onChange={(m) => setVent({ mode: m })}
           />
-          <p className="mt-1.5 text-[10px] leading-tight text-slate-500">{MODE_DESC[vent.mode]}</p>
+          <p className="mt-1.5 text-[10px] leading-tight text-slate-500">
+            {ui.vent.modeDesc[vent.mode]}
+          </p>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -55,7 +53,7 @@ export function ControlPanel() {
 
           {(vent.mode === 'VC-AC' || vent.mode === 'PC-AC') && (
             <Slider
-              label="Set rate"
+              label={ui.vent.setRate}
               value={vent.rate}
               min={6}
               max={35}
@@ -84,7 +82,7 @@ export function ControlPanel() {
                 step={5}
                 unit="L/min"
                 onChange={(v) => setVent({ inspFlow: v })}
-                hint="Low flow vs. a hungry patient → flow starvation."
+                hint={ui.vent.hint.inspFlow}
               />
             </>
           )}
@@ -99,7 +97,7 @@ export function ControlPanel() {
                 step={1}
                 unit="cmH₂O"
                 onChange={(v) => setVent({ pInsp: v })}
-                hint="Above PEEP. Drives tidal volume with compliance."
+                hint={ui.vent.hint.pInsp}
               />
               <Slider
                 label="Insp. time"
@@ -132,7 +130,7 @@ export function ControlPanel() {
                 step={5}
                 unit="%"
                 onChange={(v) => setVent({ cycleOff: v / 100 })}
-                hint="% of peak flow at which inspiration ends."
+                hint={ui.vent.hint.cycleOff}
               />
             </>
           )}
@@ -161,14 +159,14 @@ export function ControlPanel() {
             onChange={(t) => setVent({ triggerType: t })}
           />
           <Slider
-            label="Sensitivity"
+            label={ui.vent.sensitivity}
             value={vent.triggerSensitivity}
             min={0.5}
             max={vent.triggerType === 'flow' ? 10 : 5}
             step={0.5}
             unit={vent.triggerType === 'flow' ? 'L/min' : 'cmH₂O'}
             onChange={(v) => setVent({ triggerSensitivity: v })}
-            hint="Too insensitive → missed efforts. Too sensitive → auto-triggering."
+            hint={ui.vent.hint.sensitivity}
           />
         </div>
       </div>

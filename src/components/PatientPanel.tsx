@@ -1,6 +1,7 @@
 import { useSim } from '../store/simStore'
 import { Slider, Panel, Toggle, SegGroup } from './ui'
 import { lungPresets, findLungPreset } from '../engine/presets'
+import { useT, useUI } from '../i18n'
 
 export function PatientPanel() {
   const lung = useSim((s) => s.settings.lung)
@@ -8,25 +9,27 @@ export function PatientPanel() {
   const setLung = useSim((s) => s.setLung)
   const setEffort = useSim((s) => s.setEffort)
   const activePreset = findLungPreset(lung)
+  const t = useT()
+  const ui = useUI()
 
   return (
-    <Panel title="Patient / lung">
+    <Panel title={ui.patient.panelTitle}>
       <div className="space-y-3.5">
         <div>
-          <div className="text-xs font-medium text-slate-300 mb-1.5">Lung phenotype</div>
+          <div className="text-xs font-medium text-slate-300 mb-1.5">{ui.patient.lungPhenotype}</div>
           <div className="grid grid-cols-2 gap-1.5">
             {lungPresets.map((p) => (
               <button
                 key={p.id}
                 onClick={() => setLung(p.lung)}
-                title={p.blurb}
+                title={t(p.blurb)}
                 className={`px-2 py-1.5 text-xs font-medium rounded-lg text-left transition ${
                   activePreset === p.id
                     ? 'bg-sky-500/20 text-sky-200 ring-1 ring-sky-500'
                     : 'bg-slate-800/60 text-slate-300 hover:bg-slate-700/60'
                 }`}
               >
-                {p.label}
+                {t(p.label)}
               </button>
             ))}
           </div>
@@ -56,10 +59,10 @@ export function PatientPanel() {
         <div className="border-t border-slate-800 pt-3 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Patient effort
+              {ui.patient.patientEffort}
             </span>
             <Toggle
-              label={effort.enabled ? 'Breathing' : 'Passive'}
+              label={effort.enabled ? ui.patient.breathing : ui.patient.passive}
               checked={effort.enabled}
               onChange={(v) => setEffort({ enabled: v })}
             />
@@ -69,24 +72,24 @@ export function PatientPanel() {
             <>
               <div className="grid grid-cols-2 gap-x-4 gap-y-3">
                 <Slider
-                  label="Effort strength"
+                  label={ui.patient.effortStrength}
                   value={effort.amplitude}
                   min={2}
                   max={20}
                   step={1}
                   unit="cmH₂O"
                   onChange={(v) => setEffort({ amplitude: v })}
-                  hint="Peak inspiratory muscle pressure (Pmus)."
+                  hint={ui.patient.hint.amplitude}
                 />
                 <Slider
-                  label="Patient rate"
+                  label={ui.patient.patientRate}
                   value={effort.rate}
                   min={8}
                   max={40}
                   step={1}
                   unit="/min"
                   onChange={(v) => setEffort({ rate: v })}
-                  hint="Neural drive; mismatch with set rate drives asynchrony."
+                  hint={ui.patient.hint.rate}
                 />
                 <Slider
                   label="Neural Ti"
@@ -96,15 +99,15 @@ export function PatientPanel() {
                   step={0.1}
                   unit="s"
                   onChange={(v) => setEffort({ neuralTi: v })}
-                  hint="Long neural Ti vs short vent Ti → double triggering."
+                  hint={ui.patient.hint.neuralTi}
                 />
                 <div className="flex items-end">
                   <SegGroup
-                    label="Coupling"
+                    label={ui.patient.coupling}
                     value={effort.coupling}
                     options={[
-                      { value: 'independent', label: 'Independent' },
-                      { value: 'reverse-trigger', label: 'Reverse' },
+                      { value: 'independent', label: ui.patient.independent },
+                      { value: 'reverse-trigger', label: ui.patient.reverse },
                     ]}
                     onChange={(c) => setEffort({ coupling: c })}
                   />
