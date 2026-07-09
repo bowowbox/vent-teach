@@ -56,8 +56,8 @@ export function DyssynchronyView() {
         <p className="text-sm text-slate-400">{scenario.short}</p>
       </div>
 
-      {/* Waveforms: pinned to top on mobile so they stay visible while adjusting controls below */}
-      <div className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur rounded-lg py-1 xl:static xl:bg-transparent xl:py-0">
+      {/* Waveforms scroll normally so they never cover the reading area on mobile. */}
+      <div className="rounded-lg">
         <SimStage minH={300} />
       </div>
 

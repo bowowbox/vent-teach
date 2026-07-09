@@ -58,8 +58,8 @@ export function ChallengeView() {
         </p>
       </div>
 
-      {/* Waveforms pinned to top on mobile so they stay visible while adjusting controls */}
-      <div className="sticky top-0 z-10 bg-slate-950/90 backdrop-blur rounded-lg py-1 xl:static xl:bg-transparent xl:py-0">
+      {/* Waveforms scroll normally so they never cover the reading area on mobile. */}
+      <div className="rounded-lg">
         <SimStage minH={300} />
       </div>
 

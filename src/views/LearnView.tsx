@@ -44,7 +44,7 @@ export function LearnView() {
       {/* Lesson body + live sim */}
       <div className="flex-1 min-w-0 grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 overflow-y-auto">
         {/* Sim pinned to top on mobile so waveforms stay visible while reading / tapping "Try this" */}
-        <div className="order-1 xl:order-2 sticky top-0 z-10 self-start w-full min-w-0 bg-slate-950/90 backdrop-blur xl:bg-transparent rounded-lg pt-1 pb-2 xl:py-0">
+        <div className="order-1 xl:order-2 xl:sticky xl:top-0 self-start w-full min-w-0 rounded-lg">
           <SimStage minH={300} />
           <p className="mt-2 text-[11px] text-slate-500 hidden sm:block">
             Press a <span className="text-sky-300 font-medium">“Try this”</span> button in the
