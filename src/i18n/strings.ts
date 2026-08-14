@@ -30,6 +30,7 @@ const en = {
     },
     hint: {
       inspFlow: 'Low flow vs. a hungry patient → flow starvation.',
+      flowPattern: 'Decelerating lowers Ppeak and lengthens Ti for the same Vt.',
       pInsp: 'Above PEEP. Drives tidal volume with compliance.',
       cycleOff: '% of peak flow at which inspiration ends.',
       sensitivity: 'Too insensitive → missed efforts. Too sensitive → auto-triggering.',
@@ -146,6 +147,7 @@ const th: UIStrings = {
     },
     hint: {
       inspFlow: 'Flow ต่ำเกินไปเมื่อเทียบกับความต้องการของผู้ป่วย → flow starvation',
+      flowPattern: 'Decelerating ทำให้ Ppeak ต่ำลงและ Ti ยาวขึ้นที่ Vt เท่าเดิม',
       pInsp: 'วัดเหนือ PEEP ทำงานร่วมกับ compliance ในการกำหนด tidal volume',
       cycleOff: '% ของ peak flow ที่ทำให้ inspiration สิ้นสุดลง',
       sensitivity: 'ไวน้อยเกินไป → พลาด effort ของผู้ป่วย ไวมากเกินไป → auto-triggering',

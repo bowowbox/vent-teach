@@ -35,6 +35,7 @@ const emptyTelemetry: Telemetry = {
   peakPressure: 0,
   plateauPressure: 0,
   measuredTidalVolume: 0,
+  inspTime: 0,
   totalRate: 0,
   autoPeep: 0,
   ieRatio: '1:0.0',

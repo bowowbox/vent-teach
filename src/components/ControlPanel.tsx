@@ -75,7 +75,7 @@ export function ControlPanel() {
                 onChange={(v) => setVent({ tidalVolume: v })}
               />
               <Slider
-                label="Insp. flow"
+                label="Peak flow"
                 value={vent.inspFlow}
                 min={20}
                 max={90}
@@ -84,6 +84,20 @@ export function ControlPanel() {
                 onChange={(v) => setVent({ inspFlow: v })}
                 hint={ui.vent.hint.inspFlow}
               />
+              <div className="col-span-2">
+                <SegGroup
+                  label="Flow pattern"
+                  value={vent.flowPattern}
+                  options={[
+                    { value: 'square', label: 'Square' },
+                    { value: 'decelerating', label: 'Decelerating' },
+                  ]}
+                  onChange={(p) => setVent({ flowPattern: p })}
+                />
+                <p className="mt-1 text-[10px] leading-tight text-slate-500">
+                  {ui.vent.hint.flowPattern}
+                </p>
+              </div>
             </>
           )}
 

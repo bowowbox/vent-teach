@@ -24,6 +24,7 @@ function Metric({
 
 export function TelemetryBar() {
   const t = useSim((s) => s.telemetry)
+  const mode = useSim((s) => s.settings.vent.mode)
   const plateauWarn = t.plateauPressure > 30
   const autoPeepWarn = t.autoPeep >= 3
 
@@ -44,6 +45,7 @@ export function TelemetryBar() {
         unit="cmH₂O"
         tone={autoPeepWarn ? 'warn' : 'default'}
       />
+      {mode === 'VC-AC' ? <Metric label="Ti" value={t.inspTime} unit="s" /> : null}
       <Metric label="I:E" value={t.ieRatio} />
       <Metric label="MinVent" value={t.minuteVentilation} unit="L/min" />
     </div>

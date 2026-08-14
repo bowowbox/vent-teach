@@ -14,7 +14,8 @@ export interface VentSettings {
   peep: number // cmH2O
   rate: number // set/backup respiratory rate (breaths/min)
   tidalVolume: number // mL (VC modes)
-  inspFlow: number // L/min peak set flow (VC modes; constant-flow model)
+  inspFlow: number // L/min peak set flow (VC modes)
+  flowPattern: 'square' | 'decelerating' // VC modes: inspiratory flow shape
   pInsp: number // cmH2O ABOVE PEEP (PC-AC inspiratory pressure)
   pSupport: number // cmH2O ABOVE PEEP (PSV support level)
   inspTime: number // seconds (PC-AC)
@@ -70,6 +71,7 @@ export interface Telemetry {
   peakPressure: number // cmH2O, last breath Ppeak
   plateauPressure: number // cmH2O, last breath estimated Pplat
   measuredTidalVolume: number // mL, last delivered breath
+  inspTime: number // seconds, measured Ti of the last breath
   totalRate: number // breaths/min (machine + patient)
   autoPeep: number // cmH2O, estimated intrinsic PEEP
   ieRatio: string // e.g. "1:2.0"

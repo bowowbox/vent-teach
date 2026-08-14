@@ -35,6 +35,7 @@ const REFRACTORY = 0.25 // min seconds between triggered breaths
 const EXP_VALVE_TIME = 0.15 // s
 const DOUBLE_WINDOW = 0.35 // expiration shorter than this = stacked/double breath
 const CARDIAC_OSC = 0.8 // cmH2O baseline oscillation (enables auto-trigger teaching)
+const DECEL_END_FRAC = 0.25 // decelerating ramp ends at this fraction of the set peak flow
 
 export class VentSim {
   private s: SimSettings
@@ -63,6 +64,7 @@ export class VentSim {
   private tPlateau = 0
   private tTidal = 0
   private tAutoPeep = 0
+  private tTi = 0 // measured inspiratory time of the last breath (s)
 
   private buffer: Sample[] = []
   private storeAccum = 0
@@ -88,7 +90,7 @@ export class VentSim {
     this.effortCounted = false
     this.effortHeldSinceBreath = false
     this.breathTimes = []
-    this.tPeak = this.tPlateau = this.tTidal = this.tAutoPeep = 0
+    this.tPeak = this.tPlateau = this.tTidal = this.tAutoPeep = this.tTi = 0
     this.buffer = []
     this.storeAccum = 0
   }
@@ -114,13 +116,16 @@ export class VentSim {
   getTelemetry(): Telemetry {
     const total = this.currentRate()
     const mv = (this.tTidal * total) / 1000 // L/min
-    const ti = this.estimatedTi()
+    // Prefer the actual measured inspiratory time; before the first breath completes
+    // (or in modes without a measured breath yet) fall back to the analytic estimate.
+    const ti = this.tTi > 0 ? this.tTi : this.estimatedTi()
     const te = total > 0 ? 60 / total - ti : 0
     const ratio = ti > 0 ? (te / ti).toFixed(1) : '0.0'
     return {
       peakPressure: round1(this.tPeak),
       plateauPressure: round1(this.tPlateau),
       measuredTidalVolume: Math.round(this.tTidal),
+      inspTime: round1(ti),
       totalRate: Math.round(total),
       autoPeep: round1(this.tAutoPeep),
       ieRatio: `1:${ratio}`,
@@ -229,9 +234,18 @@ export class VentSim {
       // Inspiration
       const tIn = this.t - this.phaseStart
       if (vent.mode === 'VC-AC') {
-        // Constant inspiratory flow (square wave); Paw is dependent.
-        const setFlow = vent.inspFlow / 60 // L/s
-        this.Q = setFlow
+        // Set inspiratory flow shape; Paw is dependent.
+        const peakFlow = vent.inspFlow / 60 // L/s (set peak)
+        if (vent.flowPattern === 'decelerating') {
+          // Ramp down from the set peak toward a floor as the target volume fills.
+          // Flow never reaches zero (floor = DECEL_END_FRAC of peak), so Ti stays finite.
+          // Average flow ~0.625x peak, so Ti runs ~1.6x the square-wave Ti for the same Vt.
+          const f = Math.min(1, Math.max(0, (this.V - this.breathStartVol) / (vent.tidalVolume / 1000)))
+          this.Q = peakFlow * (1 - (1 - DECEL_END_FRAC) * f)
+        } else {
+          // Square (constant) flow.
+          this.Q = peakFlow
+        }
         this.paw = vent.peep + this.V / C + lung.resistance * this.Q - pmus
         this.peakInspFlow = Math.max(this.peakInspFlow, this.Q)
         // Cycle once a full set tidal volume has been delivered THIS breath. Measuring
@@ -309,6 +323,8 @@ export class VentSim {
     this.tPlateau = round1(this.s.vent.peep + this.V / C)
     this.tPeak = round1(Math.max(this.paw, this.tPlateau))
     this.tTidal = this.V * 1000
+    // phaseStart still holds this inspiration's start time, so this is the actual Ti.
+    this.tTi = this.t - this.phaseStart
     // Double triggering: if neural effort is still active as we open the exhalation
     // valve, the patient immediately re-triggers a stacked breath.
     this.phase = 'exp'

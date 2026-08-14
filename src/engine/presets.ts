@@ -7,7 +7,8 @@ export const defaultVent: VentSettings = {
   peep: 5,
   rate: 14,
   tidalVolume: 420, // ~6 mL/kg for a 70 kg PBW patient
-  inspFlow: 50, // L/min
+  inspFlow: 50, // L/min (peak set flow)
+  flowPattern: 'square', // constant flow by default
   pInsp: 15,
   pSupport: 12,
   inspTime: 1.0,
