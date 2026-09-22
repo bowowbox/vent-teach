@@ -84,6 +84,16 @@ export function ControlPanel() {
                 onChange={(v) => setVent({ inspFlow: v })}
                 hint={ui.vent.hint.inspFlow}
               />
+              <Slider
+                label="Insp. pause"
+                value={vent.pauseTime}
+                min={0}
+                max={1.0}
+                step={0.1}
+                unit="s"
+                onChange={(v) => setVent({ pauseTime: v })}
+                hint={ui.vent.hint.pauseTime}
+              />
               <div className="col-span-2">
                 <SegGroup
                   label="Flow pattern"

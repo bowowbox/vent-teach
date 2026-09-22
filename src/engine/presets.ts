@@ -9,6 +9,7 @@ export const defaultVent: VentSettings = {
   tidalVolume: 420, // ~6 mL/kg for a 70 kg PBW patient
   inspFlow: 50, // L/min (peak set flow)
   flowPattern: 'square', // constant flow by default
+  pauseTime: 0, // no inspiratory hold unless the user asks for one
   pInsp: 15,
   pSupport: 12,
   inspTime: 1.0,

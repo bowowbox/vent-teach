@@ -16,6 +16,7 @@ export interface VentSettings {
   tidalVolume: number // mL (VC modes)
   inspFlow: number // L/min peak set flow (VC modes)
   flowPattern: 'square' | 'decelerating' // VC modes: inspiratory flow shape
+  pauseTime: number // s, VC modes: inspiratory pause (hold) after volume delivery; 0 = off
   pInsp: number // cmH2O ABOVE PEEP (PC-AC inspiratory pressure)
   pSupport: number // cmH2O ABOVE PEEP (PSV support level)
   inspTime: number // seconds (PC-AC)

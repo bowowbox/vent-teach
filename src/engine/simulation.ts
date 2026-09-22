@@ -50,6 +50,11 @@ export class VentSim {
   private lastBreathStart = -999
   private breathStartVol = 0 // litres in the lung at the start of the current inspiration
   private peakInspFlow = 0 // L/s this breath (for PSV cycling)
+  // Inspiratory hold (VC modes). The hold is part of inspiration, not a phase of its own:
+  // Ti includes it, and no triggering may happen until the exhalation valve opens.
+  private inPause = false
+  private pauseStart = 0
+  private breathPeakPaw = 0 // highest Paw so far this inspiration (the peak survives the hold)
   private neuralClock = 0 // s within the patient's neural cycle
   private prevPmus = 0
   private prevOsc = 0
@@ -84,6 +89,9 @@ export class VentSim {
     this.lastBreathStart = -999
     this.breathStartVol = 0
     this.peakInspFlow = 0
+    this.inPause = false
+    this.pauseStart = 0
+    this.breathPeakPaw = 0
     this.neuralClock = 0
     this.prevPmus = 0
     this.prevOsc = 0
@@ -234,25 +242,41 @@ export class VentSim {
       // Inspiration
       const tIn = this.t - this.phaseStart
       if (vent.mode === 'VC-AC') {
-        // Set inspiratory flow shape; Paw is dependent.
-        const peakFlow = vent.inspFlow / 60 // L/s (set peak)
-        if (vent.flowPattern === 'decelerating') {
-          // Ramp down from the set peak toward a floor as the target volume fills.
-          // Flow never reaches zero (floor = DECEL_END_FRAC of peak), so Ti stays finite.
-          // Average flow ~0.625x peak, so Ti runs ~1.6x the square-wave Ti for the same Vt.
-          const f = Math.min(1, Math.max(0, (this.V - this.breathStartVol) / (vent.tidalVolume / 1000)))
-          this.Q = peakFlow * (1 - (1 - DECEL_END_FRAC) * f)
+        if (this.inPause) {
+          // Inspiratory hold: both valves shut, so no flow and the volume already in the
+          // lung stays put. Paw falls from peak to the elastic recoil pressure — that flat
+          // shelf IS the plateau. A patient still pulling drags it below the true Pplat,
+          // which is exactly why a hold only measures Pplat in a passive patient.
+          this.Q = 0
+          this.paw = vent.peep + this.V / C - pmus
+          if (this.t - this.pauseStart >= vent.pauseTime) this.endInspiration()
         } else {
-          // Square (constant) flow.
-          this.Q = peakFlow
-        }
-        this.paw = vent.peep + this.V / C + lung.resistance * this.Q - pmus
-        this.peakInspFlow = Math.max(this.peakInspFlow, this.Q)
-        // Cycle once a full set tidal volume has been delivered THIS breath. Measuring
-        // delivered volume relative to the breath's starting lung volume is what lets a
-        // stacked (double-triggered) second breath deliver its own full tidal volume.
-        if (this.V - this.breathStartVol >= vent.tidalVolume / 1000) {
-          this.endInspiration()
+          // Set inspiratory flow shape; Paw is dependent.
+          const peakFlow = vent.inspFlow / 60 // L/s (set peak)
+          if (vent.flowPattern === 'decelerating') {
+            // Ramp down from the set peak toward a floor as the target volume fills.
+            // Flow never reaches zero (floor = DECEL_END_FRAC of peak), so Ti stays finite.
+            // Average flow ~0.625x peak, so Ti runs ~1.6x the square-wave Ti for the same Vt.
+            const f = Math.min(1, Math.max(0, (this.V - this.breathStartVol) / (vent.tidalVolume / 1000)))
+            this.Q = peakFlow * (1 - (1 - DECEL_END_FRAC) * f)
+          } else {
+            // Square (constant) flow.
+            this.Q = peakFlow
+          }
+          this.paw = vent.peep + this.V / C + lung.resistance * this.Q - pmus
+          this.peakInspFlow = Math.max(this.peakInspFlow, this.Q)
+          this.breathPeakPaw = Math.max(this.breathPeakPaw, this.paw)
+          // Cycle once a full set tidal volume has been delivered THIS breath. Measuring
+          // delivered volume relative to the breath's starting lung volume is what lets a
+          // stacked (double-triggered) second breath deliver its own full tidal volume.
+          if (this.V - this.breathStartVol >= vent.tidalVolume / 1000) {
+            if (vent.pauseTime > 0) {
+              this.inPause = true
+              this.pauseStart = this.t
+            } else {
+              this.endInspiration()
+            }
+          }
         }
       } else {
         // Pressure-targeted (PC-AC / PSV / CPAP): Paw follows target with rise time.
@@ -267,6 +291,7 @@ export class VentSim {
         this.paw = vent.peep + pt
         this.Q = (pt + pmus - this.V / C) / lung.resistance
         this.peakInspFlow = Math.max(this.peakInspFlow, this.Q)
+        this.breathPeakPaw = Math.max(this.breathPeakPaw, this.paw)
 
         // Cycling
         if (vent.mode === 'PC-AC') {
@@ -305,6 +330,8 @@ export class VentSim {
     this.lastBreathStart = this.t
     this.breathStartVol = this.V
     this.peakInspFlow = 0.0001
+    this.inPause = false
+    this.breathPeakPaw = this.s.vent.peep
     this.breathTimes.push(this.t)
     const cutoff = this.t - 30
     this.breathTimes = this.breathTimes.filter((x) => x > cutoff)
@@ -319,9 +346,14 @@ export class VentSim {
 
   private endInspiration() {
     const C = this.s.lung.compliance / 1000
-    // Plateau = elastic pressure at end-inspiration (no-flow), peak = last Paw.
-    this.tPlateau = round1(this.s.vent.peep + this.V / C)
-    this.tPeak = round1(Math.max(this.paw, this.tPlateau))
+    // With a real inspiratory hold, Pplat is what the manometer actually read at the end of
+    // it — Pmus included, which is why an active patient makes Pplat read falsely low.
+    // Without a hold, fall back to the analytic no-flow elastic pressure.
+    this.tPlateau = round1(this.inPause ? this.paw : this.s.vent.peep + this.V / C)
+    // Peak must come from the latch, not the current Paw: during a hold the current Paw is
+    // the plateau, and with decelerating flow the peak happens mid-breath.
+    this.tPeak = round1(Math.max(this.breathPeakPaw, this.tPlateau))
+    this.inPause = false
     this.tTidal = this.V * 1000
     // phaseStart still holds this inspiration's start time, so this is the actual Ti.
     this.tTi = this.t - this.phaseStart
@@ -377,7 +409,7 @@ export class VentSim {
 
   private estimatedTi(): number {
     const { vent } = this.s
-    if (vent.mode === 'VC-AC') return vent.tidalVolume / 1000 / (vent.inspFlow / 60)
+    if (vent.mode === 'VC-AC') return vent.tidalVolume / 1000 / (vent.inspFlow / 60) + vent.pauseTime
     if (vent.mode === 'PC-AC') return vent.inspTime
     return 0.9 // approximate for PSV/CPAP
   }
