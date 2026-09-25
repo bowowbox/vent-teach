@@ -82,8 +82,16 @@ interface SessionStore {
   /** Instructor only: what the learner currently has dialled, and their real telemetry. */
   remoteVent: VentSettings | null
   remoteTelemetry: Telemetry | null
-  /** Instructor only: the learner's actual tracing, streamed from their engine. */
+  /**
+   * Instructor only: the learner's actual tracing, streamed from their engine.
+   *
+   * Read this with `useSession.getState()` from a render loop, NOT with a reactive
+   * selector — it updates several times a second and a subscriber would re-render the
+   * whole console at that rate. `mirrorLive` is the cheap flag for UI chrome.
+   */
   remoteSamples: RenderSample[]
+  /** True once the learner's tracing is actually arriving. Flips once, not per chunk. */
+  mirrorLive: boolean
 
   /** The dyssynchrony case last loaded, or `'normal'`, or null if none yet. */
   activeScenarioId: string | null
@@ -176,6 +184,7 @@ export const useSession = create<SessionStore>((set, get) => ({
   remoteVent: null,
   remoteTelemetry: null,
   remoteSamples: [],
+  mirrorLive: false,
   activeScenarioId: null,
   pushVentWithScenario: true,
 
@@ -284,6 +293,7 @@ export const useSession = create<SessionStore>((set, get) => ({
       remoteVent: null,
       remoteTelemetry: null,
       remoteSamples: [],
+      mirrorLive: false,
       activeScenarioId: null,
     })
   },
@@ -322,6 +332,7 @@ async function connect(
     peerPresent: false,
     activeScenarioId: null,
     remoteSamples: [],
+    mirrorLive: false,
   })
 
   try {
@@ -365,7 +376,11 @@ async function connect(
         api.onValue(at('waveform'), (s) => {
           const incoming = decodeChunk(s.val())
           if (!incoming.length) return
-          set({ remoteSamples: mergeSamples(get().remoteSamples, incoming) })
+          const merged = mergeSamples(get().remoteSamples, incoming)
+          // mirrorLive only ever flips false->true here, so chrome subscribed to it does
+          // not re-render per chunk; the canvas pulls remoteSamples itself each frame.
+          if (get().mirrorLive) set({ remoteSamples: merged })
+          else set({ remoteSamples: merged, mirrorLive: true })
         }),
         api.onValue(at('abg/request'), (s) => {
           const req = s.val() as { at: number } | null

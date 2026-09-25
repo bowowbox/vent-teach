@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { sim, useSim } from '../store/simStore'
 import type { TriggerEvent } from '../engine/types'
-import type { RenderSample } from '../session/waveform'
+import { advanceSweep, type RenderSample } from '../session/waveform'
 
 const COLORS = {
   pressure: '#38bdf8',
@@ -67,22 +67,29 @@ function bound(buf: RenderSample[], key: 'flow', floor: number): number {
   return m + 10
 }
 
+/** Returns the tracing to draw, or null to fall back to this device's own engine. */
+export type SampleSource = () => RenderSample[] | null
+
 /**
- * `samples` renders someone else's tracing instead of this device's own engine — the
+ * `getSamples` renders someone else's tracing instead of this device's own engine — the
  * instructor console in a session, showing what the learner's machine actually produced.
  *
  * It cannot be derived locally: two engines on identical settings diverge, and for double
  * triggering into clinically different patients (Vt 747 vs 366 mL from an 80 ms difference
  * in start time). When `samples` is supplied the local engine is left alone entirely.
  */
-export function WaveformDisplay({ samples }: { samples?: RenderSample[] | null } = {}) {
+export function WaveformDisplay({ getSamples }: { getSamples?: SampleSource } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const showPmus = useSim((s) => s.showPmus)
   const showPmusRef = useRef(showPmus)
   showPmusRef.current = showPmus
-  // Read through a ref so the RAF loop never needs re-creating when new samples arrive.
-  const samplesRef = useRef(samples)
-  samplesRef.current = samples
+  // A getter rather than an array: samples arrive several times a second, and passing them
+  // as a prop would re-render this component (and its siblings) at that rate. The RAF loop
+  // pulls the latest buffer itself, so arriving data costs no React work at all.
+  const sourceRef = useRef(getSamples)
+  sourceRef.current = getSamples
+  // Smoothed sweep position, mirror mode only. See the frame loop.
+  const sweepRef = useRef<number | null>(null)
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -106,19 +113,30 @@ export function WaveformDisplay({ samples }: { samples?: RenderSample[] | null }
       const dt = (now - last) / 1000
       last = now
       const st = useSim.getState()
-      const remote = samplesRef.current
+      const remote = sourceRef.current?.() ?? null
 
-      // Driving someone else's tracing: do not advance or read the local engine at all.
-      if (!remote) {
+      let sweep: number
+      if (remote) {
+        // Mirror mode: do not advance or read the local engine at all.
+        //
+        // See advanceSweep: local wall-clock motion eased toward the arriving data, so
+        // the picture moves at 60 fps rather than at the 4 Hz the chunks arrive.
+        const newest = remote.length ? remote[remote.length - 1].t : 0
+        sweepRef.current = advanceSweep(sweepRef.current, newest, dt)
+        sweep = sweepRef.current
+      } else {
+        sweepRef.current = null
         if (st.running) sim.advance(dt, st.speed)
         telAccum += dt
         if (telAccum > 0.2) {
           telAccum = 0
           st._setTelemetry(sim.getTelemetry())
         }
+        const local = sim.getBuffer()
+        sweep = local.length ? local[local.length - 1].t : 0
       }
 
-      draw(ctx, canvas, remote ?? sim.getBuffer(), showPmusRef.current)
+      draw(ctx, canvas, remote ?? sim.getBuffer(), showPmusRef.current, sweep)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -141,6 +159,7 @@ function draw(
   canvas: HTMLCanvasElement,
   buf: RenderSample[],
   showPmus: boolean,
+  now: number,
 ) {
   const dpr = window.devicePixelRatio || 1
   const W = canvas.width / dpr
@@ -153,7 +172,6 @@ function draw(
   const plotW = W - padL - padR
   const laneH = (H - laneGap * (LANES.length - 1)) / LANES.length
 
-  const now = buf.length ? buf[buf.length - 1].t : 0
   const t0 = now - WINDOW_S
   const xOf = (t: number) => padL + ((t - t0) / WINDOW_S) * plotW
 

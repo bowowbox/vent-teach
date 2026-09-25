@@ -17,6 +17,9 @@ import { useUI } from '../i18n'
 // Role router for the Session tab. The connection itself lives at module scope in
 // sessionStore, so switching tabs (which unmounts this whole subtree) does not drop it.
 
+/** Module scope so the identity is stable and the canvas effect never re-runs. */
+const readRemoteSamples = () => useSession.getState().remoteSamples
+
 function CodeBadge() {
   const code = useSession((s) => s.code)
   const role = useSession((s) => s.role)
@@ -71,13 +74,11 @@ function CodeBadge() {
 function InstructorConsole() {
   const peerPresent = useSession((s) => s.peerPresent)
   const remoteTelemetry = useSession((s) => s.remoteTelemetry)
-  const remoteSamples = useSession((s) => s.remoteSamples)
+  // Deliberately NOT subscribing to remoteSamples: it changes several times a second and
+  // would re-render every panel below at that rate. `mirrorLive` flips once, and the canvas
+  // pulls the samples itself through the getter.
+  const live = useSession((s) => s.mirrorLive)
   const ui = useUI()
-
-  // Render the learner's own tracing once it is arriving; until then fall back to a local
-  // simulation, labelled as such. The two cannot be assumed to agree — identical settings
-  // diverge, and for double triggering into clinically different patients.
-  const live = remoteSamples.length > 0
 
   return (
     <div className="p-2.5 sm:p-3 space-y-3">
@@ -98,7 +99,7 @@ function InstructorConsole() {
           <div className="flex flex-col gap-2.5">
             <TelemetryBar telemetry={remoteTelemetry ?? undefined} />
             <div style={{ minHeight: 280 }} className="flex-1">
-              <WaveformDisplay samples={live ? remoteSamples : null} />
+              <WaveformDisplay getSamples={live ? readRemoteSamples : undefined} />
             </div>
             {/* Playback is local to each device, so it would not control the learner's
                 tracing. Hide it while mirroring rather than offer a dead control. */}

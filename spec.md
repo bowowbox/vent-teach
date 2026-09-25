@@ -159,6 +159,43 @@ unconfigured Session tab and needs a second build.
 
 ## What was done
 
+### 2026-09-25 (fix 3) — the mirrored tracing moved at 4 fps
+
+Reported: synced, but the graphic looks really laggy.
+
+`draw()` set the sweep window from the newest sample's timestamp
+(`now = buf[buf.length - 1].t`). That is right when the local engine advances every frame,
+but wrong when the data arrives in chunks: the canvas redrew at 60 fps while the picture
+only moved when a chunk landed. Measured on the old path: **18 of 300 frames moved (6 %),
+in jumps of up to 267 ms of trace at once.**
+
+Fix: the sweep runs on local wall time and is eased toward `newest - MIRROR_LAG_S`, never
+pinned to it — a video jitter buffer. `advanceSweep()` in `session/waveform.ts`, pure and
+therefore testable. Held 0.3 s behind the newest sample so there is always data under the
+leading edge; chunks arrive every 250 ms, so a shorter lag would leave a growing blank
+sliver at the right.
+
+**Tuning mattered more than the idea.** The first attempt used a drift pull of 0.08 and was
+still visibly uneven: per-frame advance swung between **5.19 and 28.96 ms** against an ideal
+16.67, a 70 % speed wobble. The cause is that the incoming signal is a 4 Hz staircase — the
+target leaps 250 ms when a chunk lands and sits still in between — so any correction strong
+enough to track it frame-by-frame passes that ripple into the sweep speed. At 0.005 the
+ripple is under 1.3 ms and the time constant is ~3 s. Measured after retuning: **15.54 to
+17.27 ms per frame, within ±5 % of real time**, and unchanged under 80 ms of simulated
+network jitter. A hard ±10 % rate clamp backs it up.
+
+Drift beyond 2 s snaps instead of easing, which covers a learner reset and a long stall; a
+simulated 3 s stall re-locked to within 0.15 s.
+
+Also stopped the arriving chunks re-rendering React. `WaveformDisplay` now takes a
+**getter** (`getSamples`) rather than an array, and the RAF loop pulls the buffer itself, so
+several updates a second cost no React work. `InstructorConsole` subscribes to a new
+`mirrorLive` boolean — which flips once — instead of to `remoteSamples`, so the panels below
+no longer re-render at chunk rate.
+
+`sweep-test` asserts the frame-by-frame smoothness directly and keeps the old pinned
+behaviour in the output as a reference, so the regression is obvious if anyone re-pins it.
+
 ### 2026-09-25 (fix 2) — the instructor now mirrors the learner's actual tracing
 
 Reported: the instructor's and learner's screens do not match. Settings sync was fine —

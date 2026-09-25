@@ -130,3 +130,50 @@ export function mergeSamples(prev: RenderSample[], incoming: RenderSample[]): Re
   while (drop < merged.length && merged[drop].t < cutoff) drop++
   return drop ? merged.slice(drop) : merged
 }
+
+// --- mirror sweep clock -----------------------------------------------------------
+//
+// The instructor's sweep must not be pinned to the newest received sample's timestamp.
+// Chunks land about four times a second, so pinning redraws at 60 fps while the picture
+// only moves at 4 fps, which reads as heavy lag. Instead the sweep runs on local wall
+// time and is eased toward the incoming data, the way a video jitter buffer works.
+
+/** Held this far behind the newest sample so there is always data under the leading edge. */
+export const MIRROR_LAG_S = 0.3
+
+/**
+ * Fraction of the remaining drift corrected per frame.
+ *
+ * Deliberately tiny. The incoming signal is a 4 Hz staircase — the target leaps 250 ms
+ * whenever a chunk lands and sits still in between — so any correction strong enough to
+ * track it frame-by-frame passes that ripple straight through to the sweep speed. At 0.08
+ * the measured per-frame advance swung between 5 and 29 ms against an ideal 16.67, a 70 %
+ * wobble. At 0.005 the ripple is under 1.3 ms and the time constant is ~3 s, which absorbs
+ * jitter without anyone seeing the trace change pace.
+ */
+const DRIFT_PULL = 0.005
+
+/** Hard bound on sweep speed as a multiple of real time, whatever the drift. */
+const RATE_MIN = 0.9
+const RATE_MAX = 1.1
+
+/** Beyond this much disagreement, snap instead of easing: a reset or a long stall. */
+const RESYNC_S = 2
+
+/**
+ * Next sweep position. `current` is null before the first frame or after a reset.
+ *
+ * The sweep runs on local wall time and is eased toward `newestSampleT - MIRROR_LAG_S`,
+ * never pinned to it: pinning is what made the picture move at the 4 Hz the chunks arrive
+ * instead of at the 60 Hz it is redrawn.
+ */
+export function advanceSweep(current: number | null, newestSampleT: number, dt: number): number {
+  const target = newestSampleT - MIRROR_LAG_S
+  if (current === null || Math.abs(target - current) > RESYNC_S) return target
+
+  const moved = current + dt
+  const eased = moved + (target - moved) * DRIFT_PULL
+  // Belt and braces: even a pathological drift cannot make the trace visibly speed up.
+  const step = Math.min(dt * RATE_MAX, Math.max(dt * RATE_MIN, eased - current))
+  return current + step
+}
