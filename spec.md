@@ -155,6 +155,44 @@ unconfigured Session tab and needs a second build.
 
 ## What was done
 
+### 2026-09-25 (fix) — instructor's own engine ignored the scenario's ventilator
+
+Reported: loading a dyssynchrony did not show the dyssynchrony, and the "Also set the
+learner's ventilator" toggle appeared to do nothing. **One root cause, two symptoms.**
+
+`loadScenario` applied only `lung` and `effort` to the instructor's own engine and sent the
+ventilator on as a command for the learner. The instructor's engine therefore picked up the
+new ventilator only once the learner echoed `vent` back — and with no learner connected,
+never. So the instructor saw the new *patient* running on the *old ventilator*: three of
+the six cases cannot appear at all without their ventilator settings, and the toggle
+changed nothing visible on the instructor's screen either way, which made it look inert.
+
+The original comment in `loadScenario` argued against `applySettings` because the
+instructor does not own `vent`. That reasoning was right about not *publishing* and was
+then over-applied to the local engine too. When the instructor is deliberately pushing a
+ventilator configuration, applying it locally is correct: it is the same value the learner
+is about to adopt, the echo that follows is idempotent, and a learner who joins later with
+settings of their own still overwrites it, so the instructor goes on mirroring them.
+
+Fix: `if (pushVentWithScenario) sim.setVent(settings.vent)`. One line. Ownership is
+untouched — the instructor's publisher only handles lung/effort, so `vent` still has
+exactly one writer, and the verification asserts the instructor writes only
+`scenario`, `patient/lung` and `patient/effort`.
+
+**Why the tests missed it.** `scenario-test` asserted what the *learner* received and what
+reached the database — both correct all along. Nothing asserted what the instructor's own
+engine was running, which is what the instructor actually looks at. The new
+`verify-fix` harness closes that gap by comparing the instructor's **trigger-marker
+profile** against a fresh `VentSim` built on the scenario settings — the Dyssynchrony tab's
+behaviour — for all six cases. All six now match exactly, including the auto-triggering and
+delayed-cycling cases that are impossible without the ventilator half. It also tests the
+toggle from a clean ventilator each time; the first attempt loaded the same case twice and
+falsely reported the toggle still broken, because the ventilator was already in the
+scenario's state from the previous load.
+
+Lesson worth keeping: in a two-sided feature, assert **both** sides' local state, not just
+the wire format and the receiving end.
+
 ### 2026-09-25 (later) — About byline, instructor scenario picker, in-app feedback
 
 Three additions after the Session tab went live.
@@ -180,10 +218,13 @@ on and the hint says what turning it off costs.
   and replaying an old command after a mid-session reload would wipe out settings the
   learner had since dialled. Cost: a learner who joins *after* a case is loaded inherits the
   patient but not the ventilator, so the instructor re-clicks. Predictable beats clever.
-- `loadScenario` uses `setLung`/`setEffort`, **not `applySettings`**, unlike the
-  Dyssynchrony tab. `applySettings` would also overwrite the instructor's local `vent` —
-  which they neither own nor publish — leaving their engine out of step with the learner's
-  real settings until the learner next touched a control. There is a test for exactly this.
+- `loadScenario` applies the patient with `setLung`/`setEffort`, and the ventilator with
+  `setVent` **only when the toggle is on** — never `applySettings`, so with the toggle off
+  the instructor's ventilator goes on mirroring whatever the learner has dialled. Setting
+  it locally does not publish (the instructor's publisher only handles lung/effort), so
+  `vent` keeps one writer.
+
+  **This was got wrong first time and shipped broken** — see the fix below.
 - No learner-facing notification: the waveforms and vitals simply change, as at the bedside.
 
 **In-app feedback.** A Feedback button in the header on every tab opening a native

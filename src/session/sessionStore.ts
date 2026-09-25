@@ -182,13 +182,26 @@ export const useSession = create<SessionStore>((set, get) => ({
         : scenarios.find((s) => s.id === scenarioId)?.settings
     if (!settings) return
 
-    // Apply only the half we own. NOT applySettings: that would also overwrite our local
-    // `vent`, which we neither own nor publish, leaving our engine out of step with the
-    // learner's real settings until they next touch a control. These two setters publish
-    // to `patient` through the existing subscribeAndPublish path.
     const sim = useSim.getState()
+
+    // The patient half is ours: these publish to `patient` through subscribeAndPublish.
     sim.setLung(settings.lung)
     sim.setEffort(settings.effort)
+
+    // The ventilator half is applied locally too when we are pushing it. Not doing so was
+    // a bug: our engine would keep the previous ventilator until the learner echoed the
+    // new one back, so the dyssynchrony never appeared on our own tracing — and with no
+    // learner connected it never appeared at all, which also made the toggle look inert.
+    //
+    // This does NOT write to `vent`: our publisher only handles lung/effort, so the node
+    // still has exactly one writer. It is the same value the learner is about to adopt,
+    // so the echo that follows is idempotent, and a learner who later joins with settings
+    // of their own still overwrites this — we go on mirroring them.
+    //
+    // Still not applySettings: with the toggle off we must leave our ventilator alone, so
+    // that it keeps tracking whatever the learner actually has dialled.
+    if (pushVentWithScenario) sim.setVent(settings.vent)
+
     sim.setRunning(true)
 
     set({ activeScenarioId: scenarioId })
