@@ -10,6 +10,7 @@ import { ChallengeView } from './views/ChallengeView'
 import { SessionView } from './views/SessionView'
 import { AboutView } from './views/AboutView'
 import { LangToggle } from './components/LangToggle'
+import { FeedbackDialog } from './components/FeedbackDialog'
 import { useUI } from './i18n'
 
 type View = 'learn' | 'sandbox' | 'dyssynchrony' | 'challenges' | 'session' | 'about'
@@ -37,7 +38,10 @@ export function App() {
             <p className="text-[10px] text-slate-500 leading-tight">{ui.app.tagline}</p>
           </div>
         </div>
-        <LangToggle />
+        <div className="flex items-center gap-2">
+          <FeedbackDialog view={view} />
+          <LangToggle />
+        </div>
       </header>
 
       <div className="flex flex-1 min-h-0 flex-col sm:flex-row">

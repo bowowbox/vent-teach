@@ -11,6 +11,18 @@ export function AboutView() {
       <header>
         <h1 className="text-xl font-bold text-slate-100">{ui.about.title}</h1>
         <p className="text-sm text-slate-400 mt-1">{ui.about.intro}</p>
+        <p className="text-xs text-slate-500 mt-2">
+          {ui.about.byline}
+          {' · '}
+          <a
+            href="https://sites.google.com/view/jutamas-saoraya/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sky-400 hover:text-sky-300 hover:underline transition"
+          >
+            {ui.about.siteLabel}
+          </a>
+        </p>
       </header>
 
       <section className="rounded-xl bg-rose-500/10 ring-1 ring-rose-500/30 p-4">

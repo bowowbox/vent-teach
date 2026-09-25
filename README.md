@@ -14,6 +14,7 @@ Every waveform is generated live by a single-compartment respiratory model (the 
 - **Challenges** — identify-the-asynchrony then fix-it assessment; the app checks the learner's correction in real time.
 - **Session** — a live two-device exercise joined by a short code: the instructor drives the patient (compliance, resistance, effort) and the monitor (HR, BP, SpO₂, RR, temp, and blood gases on request), while the learner sees only the waveforms, the telemetry and the vital signs, and has to titrate the ventilator. Requires a Firebase project — see [Session sync](#session-sync-two-device-teaching).
 - **Evidence panels** — every module cites primary literature (curated from a Zotero library) with DOI links.
+- **Feedback** — a button in the header lets anyone send a correction or suggestion straight to the author. Uses the same Firebase project as Session — see [Feedback](#feedback).
 
 ## Getting started
 
@@ -51,23 +52,37 @@ VITE_FIREBASE_PROJECT_ID=...
 These are public client identifiers, not secrets — they are readable in any deployed
 bundle, which is normal for Firebase web apps.
 
-**3. Apply database rules** scoped to `/sessions` only:
+**3. Apply database rules.** These cover both the Session tab and the Feedback button:
 
 ```json
 {
   "rules": {
     "sessions": {
       "$code": { ".read": true, ".write": true }
+    },
+    "feedback": {
+      ".read": false,
+      "$id": {
+        ".write": "!data.exists()",
+        ".validate": "newData.hasChildren(['message','at']) && newData.child('message').isString() && newData.child('message').val().length <= 2000"
+      }
     }
   }
 }
 ```
 
-> **What this trades away.** These rules are open, so the six-character join code is the
-> only access control: anyone who guessed a live code could read or disturb that session.
-> For a teaching simulator that holds no patient data this buys zero-friction joining at
-> acceptable cost, and the code space is about 8.9 × 10⁸. If that is not acceptable in your
-> setting, add Firebase Anonymous Auth and require an authenticated `uid` in the rules.
+> **What this trades away.** The `sessions` rules are open, so the six-character join code
+> is the only access control: anyone who guessed a live code could read or disturb that
+> session. For a teaching simulator that holds no patient data this buys zero-friction
+> joining at acceptable cost, and the code space is about 8.9 × 10⁸. If that is not
+> acceptable in your setting, add Firebase Anonymous Auth and require an authenticated
+> `uid` in the rules.
+>
+> The `feedback` rules are tighter: `".read": false` means **no client can read
+> submissions back**, not even the person who sent one, and `".write": "!data.exists()"`
+> makes entries create-only so nothing already sent can be edited or deleted. An open write
+> node can still be filled with junk by a determined person; the rules cap the damage and
+> clearing it is one click in the console.
 
 ### How a session works
 
@@ -97,11 +112,26 @@ values, streamed up from their machine.
 Firebase itself loads only when you open a session — it is a separate lazy-loaded chunk, so
 the other tabs do not download it.
 
+## Feedback
+
+A **Feedback** button sits in the header on every tab. It opens a small dialog with a
+message box and an optional email, and writes to a `/feedback` node in the same Firebase
+database. Alongside the message it records which tab the person was on, their interface
+language and a truncated user-agent string — the three things that make a bug report
+reproducible. The dialog says so, on screen.
+
+**Read submissions in the Firebase console: Realtime Database → Data → `feedback`.** Keys
+are `push()` ids, so entries list oldest first. There is no email notification — that would
+need Cloud Functions, which require the paid Blaze plan.
+
+The button hides itself entirely when no Firebase project is configured, so an
+unconfigured build simply has no feedback route rather than a button that fails.
+
 ## Deploying
 
 The build output in `dist/` is fully static — host it anywhere:
 
-- **Netlify / Vercel / Cloudflare Pages** — point at the repo; build command `npm run build`, publish directory `dist`. Add the four `VITE_FIREBASE_*` variables if you want the Session tab to work.
+- **Netlify / Vercel / Cloudflare Pages** — point at the repo; build command `npm run build`, publish directory `dist`. Add the four `VITE_FIREBASE_*` variables if you want the Session tab and the Feedback button to work.
 - **University web server / GitHub Pages** — upload the contents of `dist/`. The Vite `base` is set to `./` so it works from a subdirectory.
 
 ## How the model works
@@ -123,7 +153,9 @@ src/
     simulation.ts   the VentSim stepper (equation of motion, triggering, cycling)
     presets.ts      default settings + lung phenotypes
   store/         Zustand store + the single shared VentSim instance
+  firebase.ts    lazy Realtime Database access, shared by session/ and feedback/
   session/       two-device teaching sessions: join codes, Firebase sync, ABG helpers
+  feedback/      feedback submission
   components/    waveform canvas, control panels, telemetry, vitals, shared UI
   content/       lessons, dyssynchrony scenarios, references (from Zotero)
   views/         Learn / Dyssynchrony / Challenge / Session / About screens

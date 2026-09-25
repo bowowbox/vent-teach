@@ -3,7 +3,7 @@
 Interactive web app teaching basic ventilator settings and patient–ventilator
 dyssynchrony to medical students, nurses, and residents.
 
-Last updated: 2026-09-25
+Last updated: 2026-09-25 (feedback + scenario picker)
 
 ---
 
@@ -13,8 +13,9 @@ React 18 + TypeScript + Vite + Zustand + Tailwind. The three waveforms are drawn
 single `<canvas>` by a hand-written renderer, not a charting library. ~4,600 lines of
 source across 34 files in `src/`.
 
-Offline and self-contained except for one tab: **Session** syncs two devices through a
-Firebase Realtime Database, lazily loaded so the rest of the app never pays for it.
+Offline and self-contained except for two features that share one Firebase Realtime
+Database, lazily loaded so the rest of the app never pays for it: **Session** (two-device
+teaching) and the **Feedback** button.
 
 ### The central idea
 
@@ -46,7 +47,9 @@ asynchrony resolve rather than watch a different canned animation play.
 | `src/components/{PatientPanel,PlaybackBar,SimStage,LangToggle,ReferenceList,ui}.tsx` | lung/effort controls, transport, shared `Slider`/`SegGroup`/`Panel`/`Toggle` |
 | `src/content/{lessons,scenarios,references}.ts` (375/402/190) | all teaching content as data |
 | `src/views/{Learn,Dyssynchrony,Challenge,Session,About}View.tsx` | the five screens |
+| `src/firebase.ts` | lazy Realtime Database access, shared by `session/` and `feedback/` |
 | `src/session/` | two-device teaching sessions — see below |
+| `src/feedback/submit.ts` | one-way feedback writes to `/feedback` |
 | `src/i18n/` | EN/TH strings and language store |
 
 The engine is framework-agnostic — it imports nothing from React. That is deliberate:
@@ -58,11 +61,10 @@ physics gets verified, and how the session sync gets tested (see *Testing*).
 | Path | Role |
 |---|---|
 | `src/session/sessionStore.ts` (~330) | zustand store + module-scope connection; publishers, subscriptions, throttling |
-| `src/session/firebase.ts` (60) | `isSessionConfigured()`, lazy `getDb()` behind a dynamic `import()` |
 | `src/session/types.ts` (70) | `VitalSigns`, `AbgResult`, `SessionRole`, `OWNERSHIP` |
 | `src/session/code.ts` (40) | join codes over a 31-symbol unambiguous alphabet |
 | `src/session/abg.ts` (45) | PaCO₂-from-MV and Henderson–Hasselbalch prefill |
-| `src/components/{VitalsMonitor,VitalsPanel,AbgPanel,VentSummary,SessionLobby}.tsx` | the two consoles' surfaces |
+| `src/components/{VitalsMonitor,VitalsPanel,AbgPanel,VentSummary,SessionLobby,ScenarioPicker}.tsx` | the two consoles' surfaces |
 
 **Single-writer ownership is the load-bearing rule.** Every database node has exactly one
 author, and each side subscribes only to the nodes it does *not* own. That makes an echo
@@ -152,6 +154,70 @@ unconfigured Session tab and needs a second build.
 ---
 
 ## What was done
+
+### 2026-09-25 (later) — About byline, instructor scenario picker, in-app feedback
+
+Three additions after the Session tab went live.
+
+**About byline.** One line under the intro: "By Jutamas Saoraya, MD, MScCH(HPTE), PhD ·
+More about the author", linking to https://sites.google.com/view/jutamas-saoraya/. The link
+label describes the destination rather than naming the site. Name and post-nominals stay
+Latin in the Thai text, per the existing convention.
+
+**Instructor scenario picker.** A "Load a case" panel on the instructor console: seven
+pills (Normal + the six dyssynchronies) and an "Also set the learner's ventilator" switch,
+default on.
+
+The ventilator half is not optional in practice — auto-triggering needs a pressure trigger
+at 0.5, delayed cycling needs PSV with 10 % cycle-off, flow starvation needs peak flow 30.
+**Three of the six cases cannot appear at all** without it, which is why the switch defaults
+on and the hint says what turning it off costs.
+
+- The instructor does not own `vent`, so they write a **one-shot `scenario` command node**
+  `{ id, at, vent? }`; the learner applies it with `setVent` and republishes it as their
+  own `vent`. Single-writer ownership survives intact — no new conflict axis.
+- The learner **ignores the value present when it attaches**. `onValue` fires immediately,
+  and replaying an old command after a mid-session reload would wipe out settings the
+  learner had since dialled. Cost: a learner who joins *after* a case is loaded inherits the
+  patient but not the ventilator, so the instructor re-clicks. Predictable beats clever.
+- `loadScenario` uses `setLung`/`setEffort`, **not `applySettings`**, unlike the
+  Dyssynchrony tab. `applySettings` would also overwrite the instructor's local `vent` —
+  which they neither own nor publish — leaving their engine out of step with the learner's
+  real settings until the learner next touched a control. There is a test for exactly this.
+- No learner-facing notification: the waveforms and vitals simply change, as at the bedside.
+
+**In-app feedback.** A Feedback button in the header on every tab opening a native
+`<dialog>` — chosen over a hand-rolled overlay because it brings a focus trap, Esc-to-close
+and a real backdrop for free. Message plus optional email, writing to a `/feedback` node in
+the same database. Also records the active tab, language and a truncated user-agent, which
+the dialog discloses on screen. A honeypot field reports success rather than an error, so a
+script has nothing to tune against. The button renders `null` when no database is
+configured.
+
+The `feedback` rules are a tighter posture than `sessions`: `".read": false` (no client can
+read submissions back, not even the sender), `".write": "!data.exists()"` (create-only), and
+a 2,000-character `.validate` cap that `submit.ts` mirrors client-side so a write never
+bounces. **The rules must be applied before shipping** or submissions fail — the same
+ordering trap as the Netlify env vars. No email notification; that needs Cloud Functions on
+the paid Blaze plan.
+
+**Structural change:** `src/session/firebase.ts` → **`src/firebase.ts`**, with
+`isSessionConfigured()` renamed `isFirebaseConfigured()`. Feedback is independent of
+sessions, so a module named `session/firebase` exporting `isSessionConfigured` would have
+been actively misleading. Two call sites changed. This also moved where the test harnesses
+copy the fake — see *Testing*.
+
+Verified with a new feedback harness (22 assertions: trimming, truncation at 2,000, blank
+email producing an *absent* key rather than `undefined`, empty messages rejected without a
+write, distinct time-ordered push keys, nothing written outside `/feedback`) and a new
+scenario harness (33 assertions), with all three earlier harnesses re-run clean after the
+file move. The scenario echo check is the one worth quoting: **one case load produces
+exactly 4 writes** — `scenario`, `patient/lung`, `patient/effort`, then the learner
+republishing `vent` — and then silence.
+
+The rename caught a real class of bug in the test doubles: the fake Firebase still exported
+the old name and was missing `push()` entirely. Both were test-double drift rather than
+product defects, but they are the reason the harnesses are worth committing.
 
 ### 2026-09-25 — Session tab: two-device instructor/learner simulation
 
@@ -386,8 +452,13 @@ Still unexercised: two genuinely separate devices on separate networks (the live
 two windows on one machine), and therefore real-world latency and mobile layout at phone
 width.
 
+**Feedback needs a rules update before it ships.** The `/feedback` node is rejected by the
+rules currently live on the Firebase project, which only permit `/sessions`. Apply the
+combined rules from the Session section of `README.md` *before* deploying, or every
+submission will fail — the same ordering trap as the Netlify env vars.
+
 **Not done:** no committed test suite; five of six challenge graders are heuristics; the
-README still lacks the live URL and predates the flow-pattern and Tpause controls.
+README predates the flow-pattern and Tpause controls.
 
 ### Blast radius
 
@@ -413,6 +484,9 @@ README still lacks the live URL and predates the flow-pattern and Tpause control
 - **Reusing `ControlPanel`/`PatientPanel` elsewhere** is now load-bearing for the session:
   publishing works by watching `useSim`, so a panel that wrote settings by some other route
   would silently fail to sync.
+- **`src/firebase.ts` is now shared** by `session/` and `feedback/`. Renaming its exports
+  breaks the test harnesses at import time (they carry a hand-written fake), which is the
+  right failure but reads like a product bug if you are not expecting it.
 
 ### Testing
 
@@ -440,22 +514,37 @@ rather than rebuilding:
   `?d=a` is not enough: the duplicated module still shares one `simStore`, because its own
   import specifier carries no query. Separate trees give each device genuinely separate
   `useSim` / `useSession` singletons, which is the isolation two browsers have.
-- Overwrite `session/firebase.js` in each tree with a fake that keeps its data on
-  `globalThis`, so the trees share one database. It must reproduce three Firebase
-  behaviours or the tests quietly lie: `onValue` fires immediately with the current value,
-  a write notifies listeners on ancestor *and* descendant paths, and values round-trip
-  through JSON.
+- Overwrite **`firebase.js` at the tree root** (it moved out of `session/` on 2026-09-25)
+  with a fake that keeps its data on `globalThis`, so the trees share one database. It must
+  reproduce four Firebase behaviours or the tests quietly lie: `onValue` fires immediately
+  with the current value, a write notifies listeners on ancestor *and* descendant paths,
+  values round-trip through JSON, and `push()` returns keys that sort chronologically.
+  Keep its exported names in step with `src/firebase.ts` — a rename there fails the
+  harnesses at import time, which is the desired behaviour but easy to misread as a
+  product bug.
 - Junction `node_modules` into the scratch directory so `zustand` resolves.
 
 Each device needs its own tree even for a throwaway case — reusing `devA` for a
 "join a nonexistent code" test tears down the instructor's live session and corrupts every
 assertion after it.
 
+**Four harnesses exist** and are re-run together after any change to `src/session/`,
+`src/feedback/` or `src/firebase.ts`: `sync-test` (ownership, echo freedom, presence,
+teardown), `telemetry-test` (idle suppression, throttling), `scenario-test` (the command
+node, skip-on-attach, instructor/learner asymmetry) and `feedback-test` (payload shape).
+`feedback-test` needs only one tree.
+
 ### Next step
 
-Run a session across two genuinely separate devices on separate networks (laptop as
-instructor, phone as learner, over the deployed site) and check the learner console at
-phone width — the mobile nav now carries six buttons.
+1. Apply the combined database rules (Session section of `README.md`) — feedback fails
+   without them.
+2. Commit and push; Netlify redeploys automatically.
+3. Send one feedback message from the live site and confirm it appears under `feedback` in
+   the Firebase console.
+4. Still outstanding from before: run a session across two genuinely separate devices on
+   separate networks (laptop as instructor, phone as learner) and check the learner console
+   at phone width — the mobile nav carries six buttons and the header now carries a
+   Feedback button too.
 
 Note that `tsconfig.app.tsbuildinfo` shows as modified after every build because it is
 tracked (see *Housekeeping*); it is build cache and does not belong in a commit.

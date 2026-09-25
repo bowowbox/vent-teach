@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { useSim } from '../store/simStore'
+import { defaultSettings } from '../engine/presets'
+import { scenarios } from '../content/scenarios'
 import type { EffortParams, LungParams, Telemetry, VentSettings } from '../engine/types'
-import { getDb, getDbApi, isSessionConfigured } from './firebase'
+import { getDb, getDbApi, isFirebaseConfigured } from '../firebase'
 import { generateCode } from './code'
 import {
   defaultAbgDraft,
@@ -27,6 +29,20 @@ import {
 // ---------------------------------------------------------------------------
 
 const STORAGE_KEY = 'venteach.session'
+
+/** The "reset to a healthy patient" pseudo-scenario. Not an id in `scenarios`. */
+export const NORMAL_CASE_ID = 'normal'
+
+/**
+ * One-shot instruction from the instructor to load a case. `vent` is present only when the
+ * instructor chose to set the learner's ventilator too; the learner applies it and
+ * republishes it as their own `vent`, so that node keeps a single writer.
+ */
+interface ScenarioCommand {
+  id: string
+  at: number
+  vent?: VentSettings
+}
 
 /** Trailing throttle for settings writes: a slider drag is dozens of onChange events. */
 const SETTINGS_MS = 120
@@ -63,7 +79,15 @@ interface SessionStore {
   remoteVent: VentSettings | null
   remoteTelemetry: Telemetry | null
 
+  /** The dyssynchrony case last loaded, or `'normal'`, or null if none yet. */
+  activeScenarioId: string | null
+  /** Instructor: whether loading a case also sets the learner's ventilator. */
+  pushVentWithScenario: boolean
+
   setVitals: (patch: Partial<VitalSigns>) => void
+  setPushVent: (v: boolean) => void
+  /** Instructor only. `'normal'` resets to a healthy baseline. */
+  loadScenario: (scenarioId: string) => void
   setAbgDraft: (patch: Partial<Omit<AbgResult, 'releasedAt'>>) => void
   releaseAbg: () => void
   requestAbg: () => void
@@ -143,6 +167,40 @@ export const useSession = create<SessionStore>((set, get) => ({
   abgRequestedAt: null,
   remoteVent: null,
   remoteTelemetry: null,
+  activeScenarioId: null,
+  pushVentWithScenario: true,
+
+  setPushVent: (v) => set({ pushVentWithScenario: v }),
+
+  loadScenario: (scenarioId) => {
+    const { code, role, pushVentWithScenario } = get()
+    if (role !== 'instructor') return
+
+    const settings =
+      scenarioId === NORMAL_CASE_ID
+        ? defaultSettings
+        : scenarios.find((s) => s.id === scenarioId)?.settings
+    if (!settings) return
+
+    // Apply only the half we own. NOT applySettings: that would also overwrite our local
+    // `vent`, which we neither own nor publish, leaving our engine out of step with the
+    // learner's real settings until they next touch a control. These two setters publish
+    // to `patient` through the existing subscribeAndPublish path.
+    const sim = useSim.getState()
+    sim.setLung(settings.lung)
+    sim.setEffort(settings.effort)
+    sim.setRunning(true)
+
+    set({ activeScenarioId: scenarioId })
+
+    // The ventilator travels as a one-shot command rather than a direct write, so `vent`
+    // keeps exactly one writer: the learner applies this and republishes it as their own.
+    if (code) {
+      const cmd: ScenarioCommand = { id: scenarioId, at: Date.now() }
+      if (pushVentWithScenario) cmd.vent = settings.vent
+      void writeNode(code, 'scenario', cmd)
+    }
+  },
 
   setVitals: (patch) => {
     const vitals = { ...get().vitals, ...patch }
@@ -202,13 +260,14 @@ export const useSession = create<SessionStore>((set, get) => ({
       abgRequestedAt: null,
       remoteVent: null,
       remoteTelemetry: null,
+      activeScenarioId: null,
     })
   },
 
   restoreSession: async () => {
     if (get().status !== 'idle') return
     const saved = loadPersisted()
-    if (!saved || !isSessionConfigured()) return
+    if (!saved || !isFirebaseConfigured()) return
     await connect(saved.code, saved.role, saved.role === 'instructor', set, get)
   },
 }))
@@ -231,7 +290,14 @@ async function connect(
   get: Getter,
 ) {
   teardown()
-  set({ status: 'connecting', error: null, code, role, peerPresent: false })
+  set({
+    status: 'connecting',
+    error: null,
+    code,
+    role,
+    peerPresent: false,
+    activeScenarioId: null,
+  })
 
   try {
     const [db, api] = await Promise.all([getDb(), getDbApi()])
@@ -281,6 +347,9 @@ async function connect(
       // We own the ventilator; publish what we currently have dialled.
       await api.set(at('vent'), settings.vent)
 
+      // Scoped per connection, so a rejoin gets a fresh skip-on-attach.
+      let seenScenario = false
+
       offs.push(
         api.onValue(at('patient'), (s) => {
           const patient = s.val() as { lung?: LungParams; effort?: EffortParams } | null
@@ -296,6 +365,22 @@ async function connect(
         }),
         api.onValue(at('abg/result'), (s) => set({ abgResult: s.val() as AbgResult | null })),
         api.onValue(at('presence/instructor'), (s) => set({ peerPresent: Boolean(s.val()) })),
+        api.onValue(at('scenario'), (s) => {
+          const cmd = s.val() as ScenarioCommand | null
+          // Ignore whatever is already there when we attach. onValue fires immediately
+          // with the current value, and replaying an old command after a mid-session
+          // reload would wipe out settings the learner has since dialled. A fresh joiner
+          // still inherits the patient through `patient`; the instructor re-clicks the
+          // case to push the ventilator.
+          if (!seenScenario) {
+            seenScenario = true
+            set({ activeScenarioId: cmd?.id ?? null })
+            return
+          }
+          if (!cmd) return
+          set({ activeScenarioId: cmd.id })
+          if (cmd.vent) useSim.getState().setVent(cmd.vent)
+        }),
       )
     }
 

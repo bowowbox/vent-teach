@@ -79,3 +79,19 @@ input[type='range']::-moz-range-thumb {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Native <dialog> used by the feedback box. The UA gives it a border, padding, a centred
+   auto margin and a white background; Tailwind classes on the element cover the rest. */
+dialog {
+  border: none;
+  padding: 0;
+  margin: auto;
+  color: inherit;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+}
+
+dialog::backdrop {
+  background: rgba(2, 6, 23, 0.72); /* slate-950 at 72% */
+  backdrop-filter: blur(2px);
+}

@@ -1,9 +1,10 @@
-// Lazy Firebase Realtime Database access.
+// Lazy Firebase Realtime Database access, shared by the two features that need it:
+// teaching sessions (src/session/) and feedback submission (src/feedback/).
 //
 // The whole SDK is behind a dynamic import() so Vite code-splits it into its own chunk:
-// firebase/app + firebase/database is about the size of the rest of the app, and the
-// four other tabs must not pay for a feature they never touch. Nothing here is imported
-// at module scope by anything the initial bundle reaches.
+// firebase/app + firebase/database is about the size of the rest of the app, and a visitor
+// who never opens a session or sends feedback must not pay for it. Nothing here is
+// imported at module scope by anything the initial bundle reaches.
 
 import type { Database } from 'firebase/database'
 
@@ -16,14 +17,14 @@ const config = {
 
 /**
  * Whether a database is configured at all. The Session tab renders setup instructions
- * instead of a lobby when this is false, so a fresh clone or a local dev run without a
- * .env stays usable rather than crashing.
+ * instead of a lobby when this is false, and the Feedback button hides itself, so a fresh
+ * clone or a local dev run without a .env stays usable rather than crashing.
  *
  * databaseURL is the only field the Realtime Database actually needs to route a request;
  * apiKey is checked too so a half-filled .env reads as unconfigured rather than failing
  * at connect time with something cryptic.
  */
-export function isSessionConfigured(): boolean {
+export function isFirebaseConfigured(): boolean {
   return Boolean(config.databaseURL && config.apiKey)
 }
 
@@ -31,7 +32,7 @@ let dbPromise: Promise<Database> | null = null
 
 /** Resolves the shared Database handle, initialising the SDK on first call. */
 export function getDb(): Promise<Database> {
-  if (!isSessionConfigured()) {
+  if (!isFirebaseConfigured()) {
     return Promise.reject(new Error('Firebase is not configured'))
   }
   // Cached at module scope: getDb() is called from every publish and subscribe, and

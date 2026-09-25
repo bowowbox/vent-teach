@@ -7,6 +7,7 @@ import { ControlPanel } from '../components/ControlPanel'
 import { PatientPanel } from '../components/PatientPanel'
 import { VitalsMonitor } from '../components/VitalsMonitor'
 import { VitalsPanel } from '../components/VitalsPanel'
+import { ScenarioPicker } from '../components/ScenarioPicker'
 import { VentSummary } from '../components/VentSummary'
 import { AbgInstructorPanel, AbgLearnerPanel } from '../components/AbgPanel'
 import { SessionLobby } from '../components/SessionLobby'
@@ -102,6 +103,8 @@ function InstructorConsole() {
 
         <div className="w-full lg:w-[360px] shrink-0 space-y-3 lg:overflow-y-auto">
           <p className="text-xs leading-snug text-slate-400">{ui.session.instructorHint}</p>
+          {/* Fast control above the fine-grained ones: load a case, then tune it. */}
+          <ScenarioPicker />
           <PatientPanel />
           <VitalsPanel />
           <AbgInstructorPanel />

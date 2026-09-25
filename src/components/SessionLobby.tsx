@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSession } from '../session/sessionStore'
 import { CODE_LENGTH, isCompleteCode, normalizeCode } from '../session/code'
-import { isSessionConfigured } from '../session/firebase'
+import { isFirebaseConfigured } from '../firebase'
 import { useUI } from '../i18n'
 
 // Entry point for the Session tab: pick a role, or type a code to join one.
@@ -20,7 +20,7 @@ export function SessionLobby() {
 
   const busy = status === 'connecting'
 
-  if (!isSessionConfigured()) {
+  if (!isFirebaseConfigured()) {
     return (
       <div className="max-w-2xl mx-auto p-5">
         <div className="rounded-xl bg-amber-500/10 ring-1 ring-amber-500/30 p-4">
