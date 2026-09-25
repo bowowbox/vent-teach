@@ -123,7 +123,8 @@ const en = {
       'Change the patient and the monitor. The learner sees the consequences on their own waveforms — they never see these numbers.',
     learnerHint:
       'The instructor is changing this patient. Read the waveforms, the telemetry and the monitor, then set the ventilator.',
-    phaseNote: 'Your tracing runs on the learner’s settings, so it matches in shape but not in timing. The telemetry above is measured on their machine.',
+    mirrorNote: 'This is the learner’s own tracing, streamed from their machine, about a third of a second behind. Their playback controls it.',
+    localNote: 'Simulated here, because no learner is connected yet. Once one joins you will see their actual tracing instead — it cannot be derived from the settings alone.',
     abgTitle: 'Arterial blood gas',
     requestAbg: 'Request ABG',
     abgPending: 'ABG requested — waiting for the result…',
@@ -310,7 +311,8 @@ const th: UIStrings = {
       'ปรับผู้ป่วยและ vital signs ได้ตามต้องการ ผู้เรียนจะเห็นผลที่เกิดขึ้นบน waveform ของตนเอง แต่จะไม่เห็นตัวเลขเหล่านี้',
     learnerHint:
       'ผู้สอนกำลังปรับผู้ป่วยรายนี้ ให้อ่าน waveform ค่าที่วัดได้ และ vital signs แล้วจึงตั้งค่า ventilator',
-    phaseNote: 'Waveform ของคุณใช้ค่าที่ผู้เรียนตั้งไว้ รูปร่างจึงตรงกันแต่จังหวะเวลาไม่ตรงกัน ค่าที่วัดได้ด้านบนมาจากเครื่องของผู้เรียนจริง',
+    mirrorNote: 'นี่คือ waveform จริงจากเครื่องของผู้เรียน ส่งมาแบบสดโดยช้ากว่าประมาณเศษวินาที และควบคุมด้วยปุ่มเล่น/หยุดของผู้เรียน',
+    localNote: 'จำลองขึ้นที่เครื่องนี้ เพราะยังไม่มีผู้เรียนเชื่อมต่อ เมื่อมีผู้เรียนเข้าร่วมจะแสดง waveform จริงของผู้เรียนแทน เพราะไม่สามารถคำนวณให้ตรงกันได้จากค่าที่ตั้งเพียงอย่างเดียว',
     abgTitle: 'Arterial blood gas',
     requestAbg: 'ขอผล ABG',
     abgPending: 'ขอผล ABG แล้ว — กำลังรอผล…',

@@ -64,6 +64,7 @@ physics gets verified, and how the session sync gets tested (see *Testing*).
 | `src/session/types.ts` (70) | `VitalSigns`, `AbgResult`, `SessionRole`, `OWNERSHIP` |
 | `src/session/code.ts` (40) | join codes over a 31-symbol unambiguous alphabet |
 | `src/session/abg.ts` (45) | PaCO₂-from-MV and Henderson–Hasselbalch prefill |
+| `src/session/waveform.ts` | decimated tracing encode/decode/merge for the instructor mirror |
 | `src/components/{VitalsMonitor,VitalsPanel,AbgPanel,VentSummary,SessionLobby,ScenarioPicker}.tsx` | the two consoles' surfaces |
 
 **Single-writer ownership is the load-bearing rule.** Every database node has exactly one
@@ -71,7 +72,7 @@ author, and each side subscribes only to the nodes it does *not* own. That makes
 loop structurally impossible — there is no path by which a value we wrote returns and
 re-triggers our own publish — so there are no revision counters or "applying remote"
 dirty flags anywhere. Instructor writes `patient/lung`, `patient/effort`, `vitals`,
-`abg/result`; learner writes `vent`, `telemetry`, `abg/request`. `abg` is split into
+`abg/result`, `scenario`; learner writes `vent`, `telemetry`, `waveform`, `abg/request`. `abg` is split into
 `request` and `result` precisely to keep that rule on a shared concept.
 
 **Publishing is driven by subscribing to `useSim`**, not by wrapping the control panels.
@@ -85,10 +86,13 @@ consumes. Keeping monitor numbers in the session store means this whole feature 
 neither `src/engine/**` nor `src/content/**`: no `presets.ts` edit, no lesson or scenario
 edit, no new `scenarios.check()` surface.
 
-**Both devices run their own `VentSim`**, so tracings match in shape but drift in phase.
-The instructor's telemetry bar is fed the learner's synced `telemetry` via
-`TelemetryBar`'s optional `telemetry` prop, so those numbers are the learner's real
-measured values rather than a local re-derivation.
+**The instructor mirrors the learner rather than simulating.** Both devices own a
+`VentSim`, but identical settings do *not* produce identical tracings — for double
+triggering the model is bistable and an 80 ms offset changes the clinical picture. So the
+learner streams its display buffer (`session/waveform.ts`, ~1.6 kB/s) and the instructor
+renders those samples with its own engine idle; `TelemetryBar` likewise takes the learner's
+synced `telemetry`. The instructor simulates locally only when no learner is connected, and
+says so on screen.
 
 ### Invariants that must hold across files
 
@@ -154,6 +158,62 @@ unconfigured Session tab and needs a second build.
 ---
 
 ## What was done
+
+### 2026-09-25 (fix 2) — the instructor now mirrors the learner's actual tracing
+
+Reported: the instructor's and learner's screens do not match. Settings sync was fine —
+`vent`, `lung` and `effort` byte-identical — and the instructor's telemetry numbers were
+already the learner's real measurements. The **waveform** was the problem: each device
+free-ran its own `VentSim`.
+
+The original design note said the two tracings "match in shape but not in phase". **That
+is wrong for the case this feature exists to teach.** Whether a breath stacks depends on
+where the neural effort lands relative to the ventilator cycle — that phase relationship
+*is* the dyssynchrony — so the double-triggering scenario is bistable, not merely
+phase-shifted. Measured, same settings, engines started 0.7 s apart:
+
+| case | Vt (mL) | auto-PEEP |
+|---|---|---|
+| ineffective | 771 vs 771 | 3.9 vs 3.9 |
+| **double** | **747 vs 366** | **9.9 vs 0.4** |
+| flow-starvation | 459 vs 459 | 0.2 vs 0.2 |
+| reverse / autotrigger / delayed-cycle | identical | identical |
+
+An **80 ms** difference in start time flips auto-PEEP between 9.9 and 0.4. Five of six
+cases agreed on the clinical picture and differed only in phase; double triggering showed
+two different patients.
+
+Fix: the learner streams its own tracing and the instructor renders that instead of
+simulating. `src/session/waveform.ts` encodes the display buffer column-major, decimated
+4:1 from the engine's 8 ms to 32 ms — still ~1.6 px apart on a 12 s / 600 px sweep.
+Measured **370-410 bytes per chunk at 4 Hz, about 1.6 kB/s**; a 30-minute session is
+roughly 3 MB against a 10 GB/month free tier.
+
+- Chunks cover 0.6 s but publish every 250 ms, so they **overlap**: a dropped write leaves
+  no gap. The instructor deduplicates by timestamp, which is what makes overlap safe.
+- Decimation would silently swallow trigger markers — the whole point of these views — so
+  the encoder **carries any event from the samples each survivor stands in for**. Tested at
+  every stride offset and for all five marker kinds.
+- `mergeSamples` treats a large backwards jump as a learner reset and restarts the buffer
+  rather than stalling forever behind a stale timestamp.
+- `waveform` is learner-owned, so single-writer ownership is untouched.
+- `WaveformDisplay` takes an optional `samples` prop; when supplied it does **not advance
+  or read the local engine at all**. `PlaybackBar` is hidden while mirroring rather than
+  offering a control that cannot affect what is shown.
+- With no learner connected the instructor falls back to a local simulation, labelled as
+  such on screen (`session.localNote` / `session.mirrorNote`).
+
+Measured end to end: the instructor's newest sample landed **0.02 s** behind the learner's
+sim clock, and all 131 mirrored samples were byte-identical to the learner's originals.
+
+**A test lied here and nearly hid a real gap.** The first marker-preservation assertion
+passed while testing nothing: the 0.6 s chunk happened to contain zero trigger events, so
+"0 kept vs 0 expected" was trivially true. `marker-test` replaces it with synthetic buffers
+that put a marker at each stride offset deliberately. Watch for assertions that can pass on
+an empty set.
+
+Known limit, accepted: two events inside one 32 ms stride group collapse to one marker.
+At 12 s across ~600 px they would overlap on screen anyway.
 
 ### 2026-09-25 (fix) — instructor's own engine ignored the scenario's ventilator
 
@@ -573,7 +633,9 @@ assertion after it.
 `src/feedback/` or `src/firebase.ts`: `sync-test` (ownership, echo freedom, presence,
 teardown), `telemetry-test` (idle suppression, throttling), `scenario-test` (the command
 node, skip-on-attach, instructor/learner asymmetry) and `feedback-test` (payload shape).
-`feedback-test` needs only one tree.
+`feedback-test` and `marker-test` need only one tree. `waveform-test` covers the mirror
+end to end; `verify-fix` compares the instructor's trigger-marker profile against a fresh
+`VentSim` for all six cases.
 
 ### Next step
 

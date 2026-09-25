@@ -63,14 +63,21 @@ function CodeBadge() {
 /**
  * Instructor: drives the patient and the monitor, watches what the learner does.
  *
- * SimStage is here for two reasons — the instructor needs to see the tracing, and the RAF
- * loop that advances the engine lives inside WaveformDisplay, so a console without it
- * would sit frozen.
+ * Every number and every trace here is the learner's, not a local re-derivation: telemetry
+ * comes from their machine and so does the waveform. That is not a nicety — two engines on
+ * identical settings diverge, and for double triggering into clinically different patients.
+ * While mirroring, this device's own engine is not advanced at all.
  */
 function InstructorConsole() {
   const peerPresent = useSession((s) => s.peerPresent)
   const remoteTelemetry = useSession((s) => s.remoteTelemetry)
+  const remoteSamples = useSession((s) => s.remoteSamples)
   const ui = useUI()
+
+  // Render the learner's own tracing once it is arriving; until then fall back to a local
+  // simulation, labelled as such. The two cannot be assumed to agree — identical settings
+  // diverge, and for double triggering into clinically different patients.
+  const live = remoteSamples.length > 0
 
   return (
     <div className="p-2.5 sm:p-3 space-y-3">
@@ -86,19 +93,20 @@ function InstructorConsole() {
       <div className="flex flex-col lg:flex-row gap-3">
         <div className="flex-1 min-w-0 space-y-3">
           <VitalsMonitor />
-          {/* Composed by hand rather than via SimStage so the telemetry bar can show the
-              learner's measured numbers while the waveform stays a local render. Both
-              devices run their own VentSim, so the tracings match in shape but not phase. */}
+          {/* Composed by hand rather than via SimStage so both the telemetry bar and the
+              waveform can show the learner's real data rather than a local re-derivation. */}
           <div className="flex flex-col gap-2.5">
             <TelemetryBar telemetry={remoteTelemetry ?? undefined} />
             <div style={{ minHeight: 280 }} className="flex-1">
-              <WaveformDisplay />
+              <WaveformDisplay samples={live ? remoteSamples : null} />
             </div>
-            <PlaybackBar />
+            {/* Playback is local to each device, so it would not control the learner's
+                tracing. Hide it while mirroring rather than offer a dead control. */}
+            {live ? null : <PlaybackBar />}
           </div>
-          {remoteTelemetry ? (
-            <p className="text-[10px] leading-tight text-slate-500">{ui.session.phaseNote}</p>
-          ) : null}
+          <p className="text-[10px] leading-tight text-slate-500">
+            {live ? ui.session.mirrorNote : ui.session.localNote}
+          </p>
         </div>
 
         <div className="w-full lg:w-[360px] shrink-0 space-y-3 lg:overflow-y-auto">

@@ -1,10 +1,11 @@
 import { create } from 'zustand'
-import { useSim } from '../store/simStore'
+import { sim, useSim } from '../store/simStore'
 import { defaultSettings } from '../engine/presets'
 import { scenarios } from '../content/scenarios'
 import type { EffortParams, LungParams, Telemetry, VentSettings } from '../engine/types'
 import { getDb, getDbApi, isFirebaseConfigured } from '../firebase'
 import { generateCode } from './code'
+import { decodeChunk, encodeChunk, mergeSamples, type RenderSample } from './waveform'
 import {
   defaultAbgDraft,
   defaultVitals,
@@ -48,6 +49,9 @@ interface ScenarioCommand {
 const SETTINGS_MS = 120
 /** Telemetry is only the instructor's numeric readout; 1/s is plenty and saves writes. */
 const TELEMETRY_MS = 1000
+/** Waveform chunk cadence. Chunks cover CHUNK_S > this, so they overlap and tolerate a
+ *  dropped write. ~19 decimated samples per chunk works out around 2.5 kB/s. */
+const WAVEFORM_MS = 250
 
 type Off = () => void
 
@@ -78,6 +82,8 @@ interface SessionStore {
   /** Instructor only: what the learner currently has dialled, and their real telemetry. */
   remoteVent: VentSettings | null
   remoteTelemetry: Telemetry | null
+  /** Instructor only: the learner's actual tracing, streamed from their engine. */
+  remoteSamples: RenderSample[]
 
   /** The dyssynchrony case last loaded, or `'normal'`, or null if none yet. */
   activeScenarioId: string | null
@@ -104,6 +110,8 @@ interface SessionStore {
 // can live in component state. Same precedent as `export const sim` in simStore.ts.
 let offs: Off[] = []
 let offSim: Off | null = null
+let waveTimer: ReturnType<typeof setInterval> | null = null
+let waveSeq = 0
 const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
 function loadPersisted(): Persisted | null {
@@ -167,6 +175,7 @@ export const useSession = create<SessionStore>((set, get) => ({
   abgRequestedAt: null,
   remoteVent: null,
   remoteTelemetry: null,
+  remoteSamples: [],
   activeScenarioId: null,
   pushVentWithScenario: true,
 
@@ -182,11 +191,12 @@ export const useSession = create<SessionStore>((set, get) => ({
         : scenarios.find((s) => s.id === scenarioId)?.settings
     if (!settings) return
 
-    const sim = useSim.getState()
+    // Named `st`, not `sim`: the module-level `sim` is the engine instance itself.
+    const st = useSim.getState()
 
     // The patient half is ours: these publish to `patient` through subscribeAndPublish.
-    sim.setLung(settings.lung)
-    sim.setEffort(settings.effort)
+    st.setLung(settings.lung)
+    st.setEffort(settings.effort)
 
     // The ventilator half is applied locally too when we are pushing it. Not doing so was
     // a bug: our engine would keep the previous ventilator until the learner echoed the
@@ -200,9 +210,9 @@ export const useSession = create<SessionStore>((set, get) => ({
     //
     // Still not applySettings: with the toggle off we must leave our ventilator alone, so
     // that it keeps tracking whatever the learner actually has dialled.
-    if (pushVentWithScenario) sim.setVent(settings.vent)
+    if (pushVentWithScenario) st.setVent(settings.vent)
 
-    sim.setRunning(true)
+    st.setRunning(true)
 
     set({ activeScenarioId: scenarioId })
 
@@ -273,6 +283,7 @@ export const useSession = create<SessionStore>((set, get) => ({
       abgRequestedAt: null,
       remoteVent: null,
       remoteTelemetry: null,
+      remoteSamples: [],
       activeScenarioId: null,
     })
   },
@@ -310,6 +321,7 @@ async function connect(
     role,
     peerPresent: false,
     activeScenarioId: null,
+    remoteSamples: [],
   })
 
   try {
@@ -350,6 +362,11 @@ async function connect(
           useSim.getState().setVent(vent)
         }),
         api.onValue(at('telemetry'), (s) => set({ remoteTelemetry: s.val() as Telemetry | null })),
+        api.onValue(at('waveform'), (s) => {
+          const incoming = decodeChunk(s.val())
+          if (!incoming.length) return
+          set({ remoteSamples: mergeSamples(get().remoteSamples, incoming) })
+        }),
         api.onValue(at('abg/request'), (s) => {
           const req = s.val() as { at: number } | null
           set({ abgRequestedAt: req?.at ?? null })
@@ -359,6 +376,15 @@ async function connect(
     } else {
       // We own the ventilator; publish what we currently have dialled.
       await api.set(at('vent'), settings.vent)
+
+      // Our engine's tracing is the one that matters: two engines on identical settings
+      // diverge, and in the double-triggering case into clinically different patients. The
+      // instructor renders these samples rather than simulating their own copy.
+      waveSeq = 0
+      waveTimer = setInterval(() => {
+        const chunk = encodeChunk(sim.getBuffer(), waveSeq++)
+        if (chunk) void writeNode(code, 'waveform', chunk)
+      }, WAVEFORM_MS)
 
       // Scoped per connection, so a rejoin gets a fresh skip-on-attach.
       let seenScenario = false
@@ -476,5 +502,7 @@ function teardown() {
   offs = []
   offSim?.()
   offSim = null
+  if (waveTimer) clearInterval(waveTimer)
+  waveTimer = null
   clearTimers()
 }

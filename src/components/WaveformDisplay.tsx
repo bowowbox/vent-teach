@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { sim, useSim } from '../store/simStore'
-import type { Sample, TriggerEvent } from '../engine/types'
+import type { TriggerEvent } from '../engine/types'
+import type { RenderSample } from '../session/waveform'
 
 const COLORS = {
   pressure: '#38bdf8',
@@ -27,8 +28,8 @@ interface Lane {
   title: string
   unit: string
   color: string
-  min: (buf: Sample[]) => number
-  max: (buf: Sample[]) => number
+  min: (buf: RenderSample[]) => number
+  max: (buf: RenderSample[]) => number
   symmetric?: boolean
 }
 
@@ -60,17 +61,28 @@ const LANES: Lane[] = [
   },
 ]
 
-function bound(buf: Sample[], key: 'flow', floor: number): number {
+function bound(buf: RenderSample[], key: 'flow', floor: number): number {
   let m = floor
   for (const s of buf) m = Math.max(m, Math.abs(s[key]))
   return m + 10
 }
 
-export function WaveformDisplay() {
+/**
+ * `samples` renders someone else's tracing instead of this device's own engine — the
+ * instructor console in a session, showing what the learner's machine actually produced.
+ *
+ * It cannot be derived locally: two engines on identical settings diverge, and for double
+ * triggering into clinically different patients (Vt 747 vs 366 mL from an 80 ms difference
+ * in start time). When `samples` is supplied the local engine is left alone entirely.
+ */
+export function WaveformDisplay({ samples }: { samples?: RenderSample[] | null } = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const showPmus = useSim((s) => s.showPmus)
   const showPmusRef = useRef(showPmus)
   showPmusRef.current = showPmus
+  // Read through a ref so the RAF loop never needs re-creating when new samples arrive.
+  const samplesRef = useRef(samples)
+  samplesRef.current = samples
 
   useEffect(() => {
     const canvas = canvasRef.current!
@@ -94,15 +106,19 @@ export function WaveformDisplay() {
       const dt = (now - last) / 1000
       last = now
       const st = useSim.getState()
-      if (st.running) sim.advance(dt, st.speed)
+      const remote = samplesRef.current
 
-      telAccum += dt
-      if (telAccum > 0.2) {
-        telAccum = 0
-        st._setTelemetry(sim.getTelemetry())
+      // Driving someone else's tracing: do not advance or read the local engine at all.
+      if (!remote) {
+        if (st.running) sim.advance(dt, st.speed)
+        telAccum += dt
+        if (telAccum > 0.2) {
+          telAccum = 0
+          st._setTelemetry(sim.getTelemetry())
+        }
       }
 
-      draw(ctx, canvas, sim.getBuffer(), showPmusRef.current)
+      draw(ctx, canvas, remote ?? sim.getBuffer(), showPmusRef.current)
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -123,7 +139,7 @@ export function WaveformDisplay() {
 function draw(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
-  buf: Sample[],
+  buf: RenderSample[],
   showPmus: boolean,
 ) {
   const dpr = window.devicePixelRatio || 1
