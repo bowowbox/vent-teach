@@ -4,6 +4,12 @@ dist-ssr
 *.local
 .vite
 
+# Firebase config for the Session tab. The keys are public client identifiers rather than
+# secrets, but the file is machine-local config and does not belong in the repo.
+.env
+.env.*
+!.env.example
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
@@ -19,3 +25,6 @@ dist-ssr
 logs
 *.log
 npm-debug.log*
+
+# Local Netlify folder
+.netlify

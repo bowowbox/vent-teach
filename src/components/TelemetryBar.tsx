@@ -1,4 +1,5 @@
 import { useSim } from '../store/simStore'
+import type { Telemetry } from '../engine/types'
 
 function Metric({
   label,
@@ -22,8 +23,14 @@ function Metric({
   )
 }
 
-export function TelemetryBar() {
-  const t = useSim((s) => s.telemetry)
+/**
+ * `telemetry` overrides the local engine's readings. Used by the instructor console in a
+ * teaching session, where the numbers worth reading are the ones measured on the
+ * learner's machine, not a local re-derivation of them.
+ */
+export function TelemetryBar({ telemetry }: { telemetry?: Telemetry } = {}) {
+  const local = useSim((s) => s.telemetry)
+  const t = telemetry ?? local
   const mode = useSim((s) => s.settings.vent.mode)
   const plateauWarn = t.plateauPressure > 30
   const autoPeepWarn = t.autoPeep >= 3

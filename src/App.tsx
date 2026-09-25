@@ -7,17 +7,19 @@ import { PlaybackBar } from './components/PlaybackBar'
 import { LearnView } from './views/LearnView'
 import { DyssynchronyView } from './views/DyssynchronyView'
 import { ChallengeView } from './views/ChallengeView'
+import { SessionView } from './views/SessionView'
 import { AboutView } from './views/AboutView'
 import { LangToggle } from './components/LangToggle'
 import { useUI } from './i18n'
 
-type View = 'learn' | 'sandbox' | 'dyssynchrony' | 'challenges' | 'about'
+type View = 'learn' | 'sandbox' | 'dyssynchrony' | 'challenges' | 'session' | 'about'
 
 const NAV: { id: View; icon: string }[] = [
   { id: 'learn', icon: '📘' },
   { id: 'sandbox', icon: '🎛️' },
   { id: 'dyssynchrony', icon: '⚡' },
   { id: 'challenges', icon: '🎯' },
+  { id: 'session', icon: '🧑‍🏫' },
   { id: 'about', icon: 'ℹ️' },
 ]
 
@@ -67,6 +69,7 @@ export function App() {
           {view === 'learn' && <LearnView />}
           {view === 'dyssynchrony' && <DyssynchronyView />}
           {view === 'challenges' && <ChallengeView />}
+          {view === 'session' && <SessionView />}
           {view === 'about' && <AboutView />}
         </main>
       </div>
